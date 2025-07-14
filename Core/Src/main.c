@@ -183,7 +183,16 @@ int main(void)
   ATC_SetEvents(&lora, events);
 //  scan_i2c_bus(); // Check what devices exist
 //  sensirion_i2c_hal_init();
-  lorawan_configure(&lora);
+  ATC_HandleTypeDef lora; // Initialize your ATC handle
+  const char *dev_eui = "0025CAFEFFEFFE2"; // Replace with your DevEUI
+  const char *app_eui = "0025CA0000000000"; // Replace with your AppEUI
+  const char *app_key = "0025CA00000000000000000000000000"; // Replace with your AppKey
+
+  if (lorawan_configure(&lora, dev_eui, app_eui, app_key)) {
+      printf("LoRaWAN configuration successful\n");
+  } else {
+      printf("LoRaWAN configuration failed\n");
+  }
 
   char *verLine = NULL;
   int ret = ATC_SendReceive(&lora,

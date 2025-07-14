@@ -1,1 +1,15 @@
-../Core/Src/lorawan/lorawan_config.c:16:6:lorawan_configure	10
+../Core/Src/lorawan/lorawan_config.c:69:6:lorawan_configure	12
+../Core/Src/lorawan/lorawan_config.c:127:13:validate_hex_string	10
+../Core/Src/lorawan/lorawan_config.c:147:24:set_dev_eui	4
+../Core/Src/lorawan/lorawan_config.c:167:24:set_app_eui	1
+../Core/Src/lorawan/lorawan_config.c:180:24:set_app_key	2
+../Core/Src/lorawan/lorawan_config.c:192:24:configure_region_and_channel	3
+../Core/Src/lorawan/lorawan_config.c:214:24:check_and_set_frequency	5
+../Core/Src/lorawan/lorawan_config.c:235:24:configure_lorawan_params	6
+../Core/Src/lorawan/lorawan_config.c:262:24:set_adr	2
+../Core/Src/lorawan/lorawan_config.c:275:24:set_otaa	2
+../Core/Src/lorawan/lorawan_config.c:287:24:set_class_a	2
+../Core/Src/lorawan/lorawan_config.c:298:24:set_data_rate	2
+../Core/Src/lorawan/lorawan_config.c:311:24:set_tx_power	2
+../Core/Src/lorawan/lorawan_config.c:323:24:join_network	3
+../Core/Src/lorawan/lorawan_config.c:341:24:save_and_reset	3
