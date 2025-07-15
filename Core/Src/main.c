@@ -2,7 +2,13 @@
 /**
   ******************************************************************************
   * @file           : main.c
-  * @brief          : Main program body
+  * @brief          : Main prog  ATC_Init(&lora, &hlpuart1, 512, "LoRaWAN");
+  ATC_SetEvents(&lora, events);
+  
+  // Initialize I2C and scan for sensors
+  printf("DEBUG: Initializing I2C sensors\n");
+  scan_i2c_bus(); // Check what devices exist
+  sensirion_i2c_hal_init(); // Initialize sensirion I2C layerbody
   ******************************************************************************
   * @attention
   *
@@ -37,6 +43,7 @@
 #include "sensirion/sensirion_common.h"
 #include "sensirion/sensirion_i2c_hal.h"
 #include "sensirion/sht4x_i2c.h"
+#include "sensirion/sensirion.h"
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -68,16 +75,6 @@ int rcv = 0;
 int loraWAKE = 0;
 int loraErr = 0;
 
-// i2c variables
-int16_t error = NO_ERROR;
-bool has_sensor_1 = false;
-uint16_t temp_ticks_1;
-uint16_t hum_ticks_1;
-
-bool has_sensor_2 = false;
-uint16_t temp_ticks_2;
-uint16_t hum_ticks_2;
-
 // LoRaWAN transmission status
 typedef enum {
     TX_STATUS_UNKNOWN,
@@ -86,22 +83,6 @@ typedef enum {
     TX_STATUS_SENT
 } TX_Status_t;
 volatile TX_Status_t last_tx_status = TX_STATUS_UNKNOWN;
-
-// LoRaWAN downlink data structure
-typedef struct {
-    char window[16];          // Receive window (1, 2, B, C, etc.)
-    int port;                 // Port number
-    int channel;              // Channel number
-    unsigned long frequency;  // Frequency in Hz
-    int datarate;             // Data rate
-    int rssi;                 // RSSI in dBm
-    int snr;                  // SNR in dB
-    char data[256];           // Hex data string
-    int data_length;          // Length of actual data in bytes
-    bool valid;               // Whether parsing was successful
-} LoRaWAN_Downlink_t;
-
-volatile LoRaWAN_Downlink_t last_downlink = {0};
 
 typedef enum {
     LORAWAN_NOT_JOINED,
@@ -113,7 +94,7 @@ typedef enum {
 	COLLECT_DATA,
 //	LORAWAN_MODULE_ERROR,
 } LoRaWAN_State_t;
-volatile LoRaWAN_State_t lorawan_state = LORAWAN_NOT_JOINED;
+volatile LoRaWAN_State_t lorawan_state = COLLECT_DATA;
 
 void cb_WAKE(const char* str)
 {
@@ -129,64 +110,10 @@ void cb_NOT_JOINED(const char* str)
 {
 	lorawan_state = LORAWAN_NOT_JOINED;
 }
-void cb_DATA_SENT(const char* str)
-{
-	// This DOES parse data correctly, but is it useful???
-	// DO i Care if i get an SENT/ACK/FAIL back from a datasend?
-	// The data from an uplink is processed by cb_DATA_RESPONSE
-
-//    const char* start = strchr(str, '[');
-//    const char* end = strchr(str, ']');
-//    if (start && end && end > start) {
-//        // Extract the status string
-//        size_t status_len = end - start - 1;
-//        char status[16] = {0}; // Buffer for status string
-//        if (status_len < sizeof(status)) {
-//            strncpy(status, start + 1, status_len);
-//            status[status_len] = '\0';
-//            // Set the appropriate status
-//            if (strcmp(status, "ACK") == 0 || strcmp(status, "SENT") == 0) {
-//                last_tx_status = TX_STATUS_ACK;
-//                lorawan_state = LORAWAN_DATA_RECEIVED; // Successfully acknowledged
-//            } else { // (strcmp(status, "FAIL") == 0)
-//                last_tx_status = TX_STATUS_FAIL;
-//                lorawan_state = LORAWAN_NOT_JOINED;
-//                // TODO: Initiate sleep flag here!
-//            }
-//        }
-//    } else {
-//        printf("DEBUG: Could not parse TX status from: %s\n", str);
-//        last_tx_status = TX_STATUS_UNKNOWN;
-//        // TODO: Initiate sleep flag here!
-//    }
-}
 void cb_DATA_RESPONSE(const char* str)
 {
-    // Fast extraction of hex data from RX message
-    // Format: "RX: W:1, P:1, C:2, F:922200000Hz, DR:2, R:-67dBm, S:5dB, 0102030405"
-    
-    // Find the last comma and extract data after it
-    const char* last_comma = strrchr(str, ',');
-    if (last_comma) {
-        last_comma++; // Skip the comma
-        
-        // Skip any spaces
-        while (*last_comma == ' ') last_comma++;
-        
-        // Copy hex data, removing any trailing \r\n
-        int i = 0;
-        while (last_comma[i] && last_comma[i] != '\r' && last_comma[i] != '\n' && i < 255) {
-            last_downlink.data[i] = last_comma[i];
-            i++;
-        }
-        last_downlink.data[i] = '\0';
-        last_downlink.data_length = i / 2; // Hex string length / 2 = byte count
-        last_downlink.valid = true;
-        
-        // Process the hex data (implement your logic here)
-        process_downlink_data(last_downlink.data, last_downlink.data_length, 0);
-    }
-    lorawan_state = DEVICE_SLEEP;
+    printf("DEBUG: Data response received: %s\n", str);
+    // You can parse downlink data here if needed
 }
 
 const ATC_EventTypeDef events[] = {
@@ -197,7 +124,7 @@ const ATC_EventTypeDef events[] = {
     { "ERROR 81",        cb_NOT_JOINED          },
 
 	/* DATA TX/RX CALLBACKS */
-	{ "TX: [",           cb_DATA_SENT           }, //Datasheet Section: 5.2.10 TX
+//	{ "TX: [",           cb_DATA_SENT           }, //Datasheet Section: 5.2.10 TX
     { "RX: W",           cb_DATA_RESPONSE       },
 
 	/* MODULE STATUS CALLBACKS */
@@ -208,10 +135,7 @@ const ATC_EventTypeDef events[] = {
 /* Private function prototypes -----------------------------------------------*/
 void SystemClock_Config(void);
 /* USER CODE BEGIN PFP */
-void process_config_command(const uint8_t* data, int length);
-void process_control_command(const uint8_t* data, int length);
-void process_firmware_command(const uint8_t* data, int length);
-void process_generic_data(const uint8_t* data, int length);
+
 /* USER CODE END PFP */
 
 /* Private user code ---------------------------------------------------------*/
@@ -260,8 +184,8 @@ int main(void)
   /* USER CODE BEGIN 2 */
   ATC_Init(&lora, &hlpuart1, 512, "LoRaWAN");
   ATC_SetEvents(&lora, events);
-//  scan_i2c_bus(); // Check what devices exist
-//  sensirion_i2c_hal_init();
+  scan_i2c_bus(); // Check what devices exist
+  sensirion_i2c_hal_init();
 
   const char *dev_eui = "0025CA00000055EE";
   const char *app_eui = "0025CA00000055EE";
@@ -274,12 +198,25 @@ int main(void)
 
   /* Infinite loop */
   /* USER CODE BEGIN WHILE */
+  printf("DEBUG: Entering main loop\n");
   while (1)
   {
     /* USER CODE END WHILE */
 
     /* USER CODE BEGIN 3 */
+	  // Validate lora handle before calling ATC_Loop
+	  if (lora.hUart == NULL) {
+		  printf("ERROR: lora.hUart is NULL!\n");
+		  Error_Handler();
+	  }
+	  if (lora.pRxBuff == NULL) {
+		  printf("ERROR: lora.pRxBuff is NULL!\n");
+		  Error_Handler();
+	  }
+	  
+	  printf("DEBUG: About to call ATC_Loop\n");
 	  ATC_Loop(&lora);
+	  printf("DEBUG: ATC_Loop completed successfully\n");
 	  switch (lorawan_state) {
 	  case LORAWAN_NOT_JOINED:
 		{
@@ -298,15 +235,24 @@ int main(void)
 		break;
 	  case LORAWAN_JOINED:
 		  // Ready to send data
-		  printf("DEBUG: Sending test data...\n");
 		  last_tx_status = TX_STATUS_UNKNOWN; // Reset status before sending
-		  resp = ATC_SendReceive(&lora, "AT+SEND \"AA\"\r\n", 200, NULL, 2000, 2, "OK");
-		  if (resp > 0) {
+
+		  char* CONNECTION_STATUS = NULL;
+		  resp = ATC_SendReceive(&lora, "ATI 3001\r\n", 200, CONNECTION_STATUS, 2000, 2, "\r0\n", "\r1\n");
+		  if (CONNECTION_STATUS == 0)
+		  {
+			  lorawan_state = LORAWAN_NOT_JOINED;
+			  break;
+		  }
+
+		  char* ATSEND_Result = NULL;
+		  int a = 12;
+		  resp = ATC_SendReceive(&lora, "AT+SEND \"AA\"\r\n", 200, &ATSEND_Result, 2000, 2, "OK");
+		  if (resp == 0) {
 			  lorawan_state = LORAWAN_DATA_SENDING;
 			  printf("DEBUG: Send command accepted\n");
 		  } else {
-			  printf("ERROR: Send command failed\n");
-			  // Stay in JOINED state to retry
+			  lorawan_state = LORAWAN_NOT_JOINED;
 		  }
 	  break;
 	  case LORAWAN_DATA_SENDING:
@@ -317,7 +263,18 @@ int main(void)
 		  lorawan_state = COLLECT_DATA;
 	  break;
 	  case COLLECT_DATA:
-		  // do sensorin data collection here!!!
+		  printf("DEBUG: COLLECT_DATA state - starting sensor operations\n");
+		  
+		  // Call sensor initialization and reading
+		  int sensor_result = sensor_init_and_read();
+		  if (sensor_result == NO_ERROR) {
+			  printf("DEBUG: Sensor data collected successfully\n");
+		  } else {
+			  printf("ERROR: Sensor data collection failed with error %d\n", sensor_result);
+		  }
+		  
+		  HAL_Delay(1000); // Small delay
+		  lorawan_state = LORAWAN_JOINED; // Go back to send data
 		  break;
 	  }
   }
@@ -374,87 +331,6 @@ void SystemClock_Config(void)
 }
 
 /* USER CODE BEGIN 4 */
-
-
-//void scan_i2c_bus(void)
-//{
-//	HAL_GPIO_WritePin(I2C_ENABLE_GPIO_Port, I2C_ENABLE_Pin, GPIO_PIN_SET);
-//    uint8_t addr;
-//    HAL_Delay(100); // let bus settle
-//
-//    for (addr = 3; addr < 0x78; addr++)
-//    {
-//        // HAL expects 8-bit address = 7-bit << 1
-//        if (HAL_I2C_IsDeviceReady(&hi2c1, addr << 1, 1, 10) == HAL_OK)
-//        {
-//        	if (addr == 68) has_sensor_1 = true;
-//        	if (addr == 70) has_sensor_2 = true;
-//        }
-//    }
-//    HAL_GPIO_WritePin(I2C_ENABLE_GPIO_Port, I2C_ENABLE_Pin, GPIO_PIN_RESET);
-//}
-
-//int sensor_init_and_read(void)
-//{
-//	if (!has_sensor_1 && !has_sensor_2) return -1;
-//	HAL_GPIO_WritePin(I2C_ENABLE_GPIO_Port, I2C_ENABLE_Pin, GPIO_PIN_SET);
-//	error = NO_ERROR;
-//	HAL_Delay(100); // Let power stabalize
-//
-//	// --- Read From Sensor A ---
-//	if (has_sensor_1)
-//	{
-//		sht4x_init(SHT43_I2C_ADDR_44);
-//		sht4x_soft_reset();
-//		sensirion_i2c_hal_sleep_usec(10000);
-//		sht4x_init(SHT43_I2C_ADDR_44);
-//		error = sht4x_measure_high_precision_ticks(&temp_ticks_1, &hum_ticks_1);
-//	}
-//
-//	// --- Read From Sensor B ---
-//	if (has_sensor_2)
-//	{
-//		sht4x_init(SHT40_I2C_ADDR_44);
-//		sht4x_soft_reset();
-//		sensirion_i2c_hal_sleep_usec(10000);
-//		sht4x_init(SHT40_I2C_ADDR_44);
-//		error = sht4x_measure_high_precision_ticks(&temp_ticks_2, &hum_ticks_2);
-//	}
-//
-//
-//	HAL_GPIO_WritePin(I2C_ENABLE_GPIO_Port, I2C_ENABLE_Pin, GPIO_PIN_RESET);
-//
-//	return error;
-//}
-
-// Function to process the received downlink data
-void process_downlink_data(const char* hex_data, int data_length, int port) {
-    if (data_length == 0) {
-        return;
-    }
-    
-    // Convert hex string to bytes for processing
-    uint8_t bytes[128]; // Buffer for converted bytes
-    int byte_count = 0;
-    
-    for (int i = 0; i < strlen(hex_data) && i < sizeof(bytes) * 2; i += 2) {
-        char hex_byte[3] = {hex_data[i], hex_data[i+1], '\0'};
-        bytes[byte_count] = (uint8_t)strtol(hex_byte, NULL, 16);
-        byte_count++;
-    }
-    
-    // Process data based on port number
-    switch (port) {
-        case 1:
-            // Port 1: Configuration commands
-            // Change uplink interval, min 5 minutes, max 1hr
-            break;
-            
-        default:
-            // return maybe???
-            break;
-    }
-}
 
 /* USER CODE END 4 */
 

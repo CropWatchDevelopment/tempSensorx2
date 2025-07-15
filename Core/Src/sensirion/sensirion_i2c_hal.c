@@ -33,15 +33,9 @@
 #include "sensirion_common.h"
 #include "sensirion_config.h"
 #include "sensirion_i2c_hal.h"
-//#include <usart.h>
+#include "i2c.h"  // Include to get the external hi2c1 handle
 #include <gpio.h>
 #include <stdio.h>
-
-/**
- * @brief Clock configuration
- * 
- */
-void SystemClock_Config(void);
 
 /**
  * @brief Global buffer to format trace messages
@@ -60,49 +54,18 @@ void assert_failed(uint8_t* file, uint32_t line)
     while(1); // stop execution
 }
 
-
-
-/**
- * Create new I2C instance. You may also use a different interface, e.g. hi2c2,
- * depending on your CubeMX configuration
- */
-static I2C_HandleTypeDef hi2c1;
+// Use the external I2C handle from main application instead of creating our own
 
 /**
  * Initialize all hard- and software components that are needed for the I2C
  * communication.
+ * 
+ * NOTE: This function is simplified since we use the I2C handle that's already
+ * initialized by the main application.
  */
 void sensirion_i2c_hal_init(void) {
-
-  /* MCU Configuration--------------------------------------------------------*/
-
-  /* Reset of all peripherals, Initializes the Flash interface and the Systick. */
-  HAL_Init();
-
-  /* Configure the system clock */
-  SystemClock_Config();
-
-
-  /* Initialize all configured peripherals */
-  MX_GPIO_Init();
-
-  /* USER CODE BEGIN I2C1_Init 0 */
-
-  hi2c1.Instance = I2C1;
-//  hi2c1.Init.ClockSpeed = 100000;
-//  hi2c1.Init.DutyCycle = I2C_DUTYCYCLE_2;
-  hi2c1.Init.OwnAddress1 = 0;
-  hi2c1.Init.AddressingMode = I2C_ADDRESSINGMODE_7BIT;
-  hi2c1.Init.DualAddressMode = I2C_DUALADDRESS_DISABLE;
-  hi2c1.Init.OwnAddress2 = 0;
-  hi2c1.Init.GeneralCallMode = I2C_GENERALCALL_DISABLE;
-  hi2c1.Init.NoStretchMode = I2C_NOSTRETCH_DISABLE;
-  
-
-  if (HAL_I2C_Init(&hi2c1) != HAL_OK)
-  {
-    Error_Handler();
-  }
+    // The I2C peripheral is already initialized by MX_I2C1_Init() in main
+    // No additional initialization needed here
 }
 
 
