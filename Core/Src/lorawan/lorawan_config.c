@@ -31,18 +31,6 @@
 #define DATA_RATE 0                 // DR0
 #define JOIN_TIMEOUT_MS 10000       // 10 seconds for join response
 
-// Error codes
-typedef enum {
-    LORAWAN_OK = 0,
-    LORAWAN_ERR_DEV_EUI,
-    LORAWAN_ERR_APP_EUI,
-    LORAWAN_ERR_APP_KEY,
-    LORAWAN_ERR_FREQ_CHECK,
-    LORAWAN_ERR_AT_COMMAND,
-    LORAWAN_ERR_SAVE_RESET,
-    LORAWAN_ERR_JOIN
-} LoRaWAN_Error_t;
-
 // Function prototypes
 static bool validate_hex_string(const char *str, size_t expected_len);
 static LoRaWAN_Error_t set_dev_eui(ATC_HandleTypeDef *lora, const char *dev_eui);
@@ -58,7 +46,6 @@ static LoRaWAN_Error_t set_class_a(ATC_HandleTypeDef *lora);
 static LoRaWAN_Error_t set_data_rate(ATC_HandleTypeDef *lora, int dr);
 static LoRaWAN_Error_t set_tx_power(ATC_HandleTypeDef *lora, int power);
 static LoRaWAN_Error_t factor_reset(ATC_HandleTypeDef *lora);
-static LoRaWAN_Error_t join_network(ATC_HandleTypeDef *lora);
 
 /**
  * @brief Configures the RM126x LoRaWAN module for Japan (AS923-1) with TTN and initiates network join.
@@ -152,10 +139,10 @@ bool lorawan_configure(ATC_HandleTypeDef *lora, const char *dev_eui, const char 
     }
 
     // Attempt to join the network
-    if ((err = join_network(lora)) != LORAWAN_OK) {
-        printf("Error joining network: %d\n", err);
-        return false;
-    }
+//    if ((err = join_network(lora)) != LORAWAN_OK) {
+//        printf("Error joining network: %d\n", err);
+//        return false;
+//    }
 
     return true;
 }
@@ -478,7 +465,7 @@ static LoRaWAN_Error_t set_tx_power(ATC_HandleTypeDef *lora, int power) {
  * @param lora Pointer to the ATC handle for communication.
  * @return LORAWAN_OK on successful join, LORAWAN_ERR_JOIN or LORAWAN_ERR_AT_COMMAND on failure.
  */
-static LoRaWAN_Error_t join_network(ATC_HandleTypeDef *lora) {
+LoRaWAN_Error_t join_network(ATC_HandleTypeDef *lora) {
     char response[AT_RESPONSE_BUFFER_SIZE];
     char *response_ptr = response;
     int resp = ATC_SendReceive(lora, "AT+JOIN\r\n", 100, &response_ptr, JOIN_TIMEOUT_MS, 1, "OK");
