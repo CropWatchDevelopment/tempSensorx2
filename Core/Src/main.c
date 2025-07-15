@@ -120,8 +120,7 @@ void cbDebug(const char* str) {
 }
 const ATC_EventTypeDef events[] = {
 	// { "",       cbDebug    },  // match everything
-    { "JOIN:",        cb_JOIN_SUCCESS   },  // catches “JOIN: [OK], …”
-//  	{ "\nCONNECT \n", cb_JOIN_SUCCESS   },
+    { "JOIN: [",      cb_JOIN_SUCCESS   },  // catches “JOIN: [OK], …”
     { "ERROR 81",     cb_NOT_JOINED     },  // join-fail code
 	{ "TX: [",        cb_DATA_SENT      },
     { "[RX]:",        cb_DATA_RESPONSE  },  // downlink received
@@ -186,7 +185,7 @@ int main(void)
   // Use the global lora variable, not a local one
   const char *dev_eui = "0025CA00000055EE"; // Replace with your DevEUI
   const char *app_eui = "0025CA00000055EE"; // Replace with your AppEUI
-  const char *app_key = "0025CA00000000000000000000000000"; // Replace with your AppKey
+  const char *app_key = "2B7E151628AED2A6ABF7158809CF4F3C"; // Test key - replace with your real AppKey
 
   if (lorawan_configure(&lora, dev_eui, app_eui, app_key)) {
       printf("LoRaWAN configuration successful\n");
@@ -194,43 +193,6 @@ int main(void)
       printf("LoRaWAN configuration failed\n");
   }
 
-  char *verLine = NULL;
-  int ret = ATC_SendReceive(&lora,
-      "ATI 3\r\n",
-      /*txTimeout=*/100,
-      &verLine,          // will point at the match for pattern[0] or pattern[1]
-      /*rxTimeout=*/200,
-      /*Items=*/2,       // we’re passing two patterns
-      "\n",              // pattern[0]: the newline before "127..."
-      "OK"               // pattern[1]: the final OK
-  );
-
-  if (ret == 1 && verLine) {
-      // ret==1 means we matched pattern[0], i.e. the newline
-      // skip that newline:
-      char *v = verLine + 1;
-      // strip trailing CR if present
-      char *cr = strchr(v, '\r');
-      if (cr) *cr = '\0';
-      printf("Firmware version: %s\n", v);
-  }
-  else if (ret == 2) {
-      // we matched "OK" first (unlikely), you could still parse lora.pReadBuff
-  }
-  else {
-      // handle timeout / error
-  }
-  __NOP();
-  /* USER CODE END 2 */
-  char *connection_result = NULL;
-  ATC_SendReceive(&lora,
-  						  "AT+JOIN\r\n",
-  						  100,
-  						  &connection_result,
-  						  500,
-  						  1,
-  						  "OK");
-  		  lorawan_state = LORAWAN_JOINING;
   /* Infinite loop */
   /* USER CODE BEGIN WHILE */
   while (1)
