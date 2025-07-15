@@ -14,6 +14,7 @@
 #include <string.h>
 #include <stdbool.h>
 #include <stdio.h>
+#include <stdlib.h>
 #include "atc.h" // Assuming ATC_HandleTypeDef and ATC_SendReceive are defined here
 
 // Constants for AT commands and parameters
@@ -56,6 +57,7 @@ static LoRaWAN_Error_t set_otaa(ATC_HandleTypeDef *lora, bool enable);
 static LoRaWAN_Error_t set_class_a(ATC_HandleTypeDef *lora);
 static LoRaWAN_Error_t set_data_rate(ATC_HandleTypeDef *lora, int dr);
 static LoRaWAN_Error_t set_tx_power(ATC_HandleTypeDef *lora, int power);
+static LoRaWAN_Error_t factor_reset(ATC_HandleTypeDef *lora);
 static LoRaWAN_Error_t join_network(ATC_HandleTypeDef *lora);
 
 /**
@@ -68,6 +70,19 @@ static LoRaWAN_Error_t join_network(ATC_HandleTypeDef *lora);
  */
 bool lorawan_configure(ATC_HandleTypeDef *lora, const char *dev_eui, const char *app_eui, const char *app_key) {
     LoRaWAN_Error_t err;
+
+    factor_reset(lora);
+
+    printf("DEBUG: lorawan_configure called with lora handle: %p\n", (void*)lora);
+    if (lora == NULL) {
+        printf("ERROR: lora handle is NULL!\n");
+        return false;
+    }
+    if (lora->hUart == NULL) {
+        printf("ERROR: lora->hUart is NULL!\n");
+        return false;
+    }
+    printf("DEBUG: lora->hUart = %p, Name = %s\n", (void*)lora->hUart, lora->Name);
 
     // Validate input parameters
     if (!validate_hex_string(dev_eui, DEV_EUI_LENGTH) ||
@@ -145,8 +160,12 @@ static bool validate_hex_string(const char *str, size_t expected_len) {
  * @return LORAWAN_OK on success, LORAWAN_ERR_DEV_EUI or LORAWAN_ERR_AT_COMMAND on failure.
  */
 static LoRaWAN_Error_t set_dev_eui(ATC_HandleTypeDef *lora, const char *dev_eui) {
+    printf("DEBUG: set_dev_eui called\n");
     char response[AT_RESPONSE_BUFFER_SIZE];
-    int resp = ATC_SendReceive(lora, "ATS 501?\r\n", 100, response, sizeof(response), 200, 1, "OK");
+    char *response_ptr = response;
+    printf("DEBUG: About to call ATC_SendReceive for DevEUI query\n");
+    int resp = ATC_SendReceive(lora, "ATS 501?\r\n", 100, &response_ptr, 200, 1, "OK");
+    printf("DEBUG: ATC_SendReceive returned %d\n", resp);
     if (resp < 0) return LORAWAN_ERR_AT_COMMAND;
 
     if (strstr(response, "0000000000000000") != NULL) {
@@ -199,9 +218,9 @@ static LoRaWAN_Error_t configure_region_and_channel(ATC_HandleTypeDef *lora) {
     if (resp < 0) return LORAWAN_ERR_AT_COMMAND;
 
     // Set sub-band channel for TTN
-    snprintf(command, sizeof(command), "ATS 606=%d\r\n", TTN_SUBBAND_CHANNEL);
-    resp = ATC_SendReceive(lora, command, 100, NULL, 200, 1, "OK");
-    if (resp < 0) return LORAWAN_ERR_AT_COMMAND;
+//    snprintf(command, sizeof(command), "ATS 606=%d\r\n", TTN_SUBBAND_CHANNEL);
+//    resp = ATC_SendReceive(lora, command, 100, NULL, 200, 1, "OK");
+//    if (resp < 0) return LORAWAN_ERR_AT_COMMAND;
 
     return LORAWAN_OK;
 }
@@ -213,7 +232,8 @@ static LoRaWAN_Error_t configure_region_and_channel(ATC_HandleTypeDef *lora) {
  */
 static LoRaWAN_Error_t check_and_set_frequency(ATC_HandleTypeDef *lora) {
     char response[AT_RESPONSE_BUFFER_SIZE];
-    int resp = ATC_SendReceive(lora, "ATS 605?\r\n", 100, response, sizeof(response), 200, 1, "OK");
+    char *response_ptr = response;
+    int resp = ATC_SendReceive(lora, "ATS 605?\r\n", 100, &response_ptr, 200, 1, "OK");
     if (resp < 0) return LORAWAN_ERR_AT_COMMAND;
 
     // Parse frequency (assuming response contains numeric Hz value)
@@ -322,7 +342,8 @@ static LoRaWAN_Error_t set_tx_power(ATC_HandleTypeDef *lora, int power) {
  */
 static LoRaWAN_Error_t join_network(ATC_HandleTypeDef *lora) {
     char response[AT_RESPONSE_BUFFER_SIZE];
-    int resp = ATC_SendReceive(lora, "AT+JOIN\r\n", 100, response, sizeof(response), JOIN_TIMEOUT_MS, 1, "OK");
+    char *response_ptr = response;
+    int resp = ATC_SendReceive(lora, "AT+JOIN\r\n", 100, &response_ptr, JOIN_TIMEOUT_MS, 1, "OK");
     if (resp < 0) return LORAWAN_ERR_AT_COMMAND;
 
     // Check for join success (expecting a response like "+JOIN: Joined" or similar)
@@ -331,6 +352,17 @@ static LoRaWAN_Error_t join_network(ATC_HandleTypeDef *lora) {
     }
 
     return LORAWAN_OK;
+}
+
+/**
+ * @brief Sets all writable parameters to default values and clears the trusted device bond database then performs a warm reset.
+ * @param lora Pointer to the ATC handle for communication.
+ * @return LORAWAN_OK on success AFTER the reboot, LORAWAN_ERR_AT_COMMAND on failure.
+ */
+static LoRaWAN_Error_t factor_reset(ATC_HandleTypeDef *lora) {
+    char command[32];
+    int resp = ATC_SendReceive(lora, command, 100, NULL, 200, 1, "OK");
+    return (resp < 0) ? LORAWAN_ERR_AT_COMMAND : LORAWAN_OK;
 }
 
 /**

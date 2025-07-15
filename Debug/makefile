@@ -63,8 +63,8 @@ all: main-build
 main-build: atz.elf secondary-outputs
 
 # Tool invocations
-atz.elf atz.map: $(OBJS) $(USER_OBJS) C:\Users\EREN\OneDrive\Companies\Cropwatch\tempSensorx2\STM32L073RZTX_FLASH.ld makefile objects.list $(OPTIONAL_TOOL_DEPS)
-	arm-none-eabi-gcc -o "atz.elf" @"objects.list" $(USER_OBJS) $(LIBS) -mcpu=cortex-m0plus -T"C:\Users\EREN\OneDrive\Companies\Cropwatch\tempSensorx2\STM32L073RZTX_FLASH.ld" --specs=nosys.specs -Wl,-Map="atz.map" -Wl,--gc-sections -static --specs=nano.specs -mfloat-abi=soft -mthumb -Wl,--start-group -lc -lm -Wl,--end-group
+atz.elf atz.map: $(OBJS) $(USER_OBJS) /home/kevin/source/STM32CubeIDE/CropWatch/atz/STM32L073RZTX_FLASH.ld makefile objects.list $(OPTIONAL_TOOL_DEPS)
+	arm-none-eabi-gcc -o "atz.elf" @"objects.list" $(USER_OBJS) $(LIBS) -mcpu=cortex-m0plus -T"/home/kevin/source/STM32CubeIDE/CropWatch/atz/STM32L073RZTX_FLASH.ld" --specs=nosys.specs -Wl,-Map="atz.map" -Wl,--gc-sections -static --specs=nano.specs -mfloat-abi=soft -mthumb -Wl,--start-group -lc -lm -Wl,--end-group
 	@echo 'Finished building target: $@'
 	@echo ' '
 
