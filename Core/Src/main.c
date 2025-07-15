@@ -78,6 +78,31 @@ bool has_sensor_2 = false;
 uint16_t temp_ticks_2;
 uint16_t hum_ticks_2;
 
+// LoRaWAN transmission status
+typedef enum {
+    TX_STATUS_UNKNOWN,
+    TX_STATUS_ACK,
+    TX_STATUS_FAIL,
+    TX_STATUS_SENT
+} TX_Status_t;
+volatile TX_Status_t last_tx_status = TX_STATUS_UNKNOWN;
+
+// LoRaWAN downlink data structure
+typedef struct {
+    char window[16];          // Receive window (1, 2, B, C, etc.)
+    int port;                 // Port number
+    int channel;              // Channel number
+    unsigned long frequency;  // Frequency in Hz
+    int datarate;             // Data rate
+    int rssi;                 // RSSI in dBm
+    int snr;                  // SNR in dB
+    char data[256];           // Hex data string
+    int data_length;          // Length of actual data in bytes
+    bool valid;               // Whether parsing was successful
+} LoRaWAN_Downlink_t;
+
+volatile LoRaWAN_Downlink_t last_downlink = {0};
+
 typedef enum {
     LORAWAN_NOT_JOINED,
     LORAWAN_JOINING,
@@ -85,6 +110,7 @@ typedef enum {
     LORAWAN_DATA_RECEIVED,
 	LORAWAN_DATA_SENDING,
 	DEVICE_SLEEP,
+	COLLECT_DATA,
 //	LORAWAN_MODULE_ERROR,
 } LoRaWAN_State_t;
 volatile LoRaWAN_State_t lorawan_state = LORAWAN_NOT_JOINED;
@@ -105,28 +131,76 @@ void cb_NOT_JOINED(const char* str)
 }
 void cb_DATA_SENT(const char* str)
 {
-	__NOP();
-//	switch(str)
-//	{
-//	case 'str'
-//	}
+	// This DOES parse data correctly, but is it useful???
+	// DO i Care if i get an SENT/ACK/FAIL back from a datasend?
+	// The data from an uplink is processed by cb_DATA_RESPONSE
+
+//    const char* start = strchr(str, '[');
+//    const char* end = strchr(str, ']');
+//    if (start && end && end > start) {
+//        // Extract the status string
+//        size_t status_len = end - start - 1;
+//        char status[16] = {0}; // Buffer for status string
+//        if (status_len < sizeof(status)) {
+//            strncpy(status, start + 1, status_len);
+//            status[status_len] = '\0';
+//            // Set the appropriate status
+//            if (strcmp(status, "ACK") == 0 || strcmp(status, "SENT") == 0) {
+//                last_tx_status = TX_STATUS_ACK;
+//                lorawan_state = LORAWAN_DATA_RECEIVED; // Successfully acknowledged
+//            } else { // (strcmp(status, "FAIL") == 0)
+//                last_tx_status = TX_STATUS_FAIL;
+//                lorawan_state = LORAWAN_NOT_JOINED;
+//                // TODO: Initiate sleep flag here!
+//            }
+//        }
+//    } else {
+//        printf("DEBUG: Could not parse TX status from: %s\n", str);
+//        last_tx_status = TX_STATUS_UNKNOWN;
+//        // TODO: Initiate sleep flag here!
+//    }
 }
-void cb_DATA_RECIEVED(const char* str)
+void cb_DATA_RESPONSE(const char* str)
 {
-	__NOP();
+    // Fast extraction of hex data from RX message
+    // Format: "RX: W:1, P:1, C:2, F:922200000Hz, DR:2, R:-67dBm, S:5dB, 0102030405"
+    
+    // Find the last comma and extract data after it
+    const char* last_comma = strrchr(str, ',');
+    if (last_comma) {
+        last_comma++; // Skip the comma
+        
+        // Skip any spaces
+        while (*last_comma == ' ') last_comma++;
+        
+        // Copy hex data, removing any trailing \r\n
+        int i = 0;
+        while (last_comma[i] && last_comma[i] != '\r' && last_comma[i] != '\n' && i < 255) {
+            last_downlink.data[i] = last_comma[i];
+            i++;
+        }
+        last_downlink.data[i] = '\0';
+        last_downlink.data_length = i / 2; // Hex string length / 2 = byte count
+        last_downlink.valid = true;
+        
+        // Process the hex data (implement your logic here)
+        process_downlink_data(last_downlink.data, last_downlink.data_length, 0);
+    }
+    lorawan_state = DEVICE_SLEEP;
 }
 
 const ATC_EventTypeDef events[] = {
 
 	/*JOINING CALLBACKS*/
-    { "JOIN: [",         cb_JOIN_SUCCESS        },
+    { "JOIN: [OK]",      cb_JOIN_SUCCESS        },
+    { "JOIN: [FAIL]",    cb_NOT_JOINED          },
     { "ERROR 81",        cb_NOT_JOINED          },
 
 	/* DATA TX/RX CALLBACKS */
 	{ "TX: [",           cb_DATA_SENT           }, //Datasheet Section: 5.2.10 TX
-    { "[RX]:",           cb_DATA_RECIEVED       },
+    { "RX: W",           cb_DATA_RESPONSE       },
 
-	/* MODULE STATIS CALLBACKS */
+	/* MODULE STATUS CALLBACKS */
     { "WAKE",            cb_WAKE                }, //Datasheet Section: 5.2.11 WAKE
 };
 /* USER CODE END PV */
@@ -134,7 +208,10 @@ const ATC_EventTypeDef events[] = {
 /* Private function prototypes -----------------------------------------------*/
 void SystemClock_Config(void);
 /* USER CODE BEGIN PFP */
-
+void process_config_command(const uint8_t* data, int length);
+void process_control_command(const uint8_t* data, int length);
+void process_firmware_command(const uint8_t* data, int length);
+void process_generic_data(const uint8_t* data, int length);
 /* USER CODE END PFP */
 
 /* Private user code ---------------------------------------------------------*/
@@ -185,10 +262,10 @@ int main(void)
   ATC_SetEvents(&lora, events);
 //  scan_i2c_bus(); // Check what devices exist
 //  sensirion_i2c_hal_init();
-  // Use the global lora variable, not a local one
-  const char *dev_eui = "0025CA00000055EE"; // Replace with your DevEUI
-  const char *app_eui = "0025CA00000055EE"; // Replace with your AppEUI
-  const char *app_key = "2B7E151628AED2A6ABF7158809CF4F3C"; // Test key - replace with your real AppKey
+
+  const char *dev_eui = "0025CA00000055EE";
+  const char *app_eui = "0025CA00000055EE";
+  const char *app_key = "2B7E151628AED2A6ABF7158809CF4F3C";
   if (lorawan_configure(&lora, dev_eui, app_eui, app_key)) {
       printf("LoRaWAN configuration successful\n");
   } else {
@@ -205,6 +282,7 @@ int main(void)
 	  ATC_Loop(&lora);
 	  switch (lorawan_state) {
 	  case LORAWAN_NOT_JOINED:
+		{
 			LoRaWAN_Error_t join_result = join_network(&lora);
 			if (join_result == LORAWAN_OK) {
 				lorawan_state = LORAWAN_JOINING;
@@ -213,18 +291,34 @@ int main(void)
 				printf("ERROR: Join command failed with error %d\n", join_result);
 				// Could implement retry logic here
 			}
+		}
 		break;
 	  case LORAWAN_JOINING:
+		// Wait for join callback to change state
 		break;
 	  case LORAWAN_JOINED:
 		  // Ready to send data
-		  HAL_Delay(100); // wait a sec for reasons.
+		  printf("DEBUG: Sending test data...\n");
+		  last_tx_status = TX_STATUS_UNKNOWN; // Reset status before sending
 		  resp = ATC_SendReceive(&lora, "AT+SEND \"AA\"\r\n", 200, NULL, 2000, 2, "OK");
-		  lorawan_state = LORAWAN_DATA_SENDING;
+		  if (resp > 0) {
+			  lorawan_state = LORAWAN_DATA_SENDING;
+			  printf("DEBUG: Send command accepted\n");
+		  } else {
+			  printf("ERROR: Send command failed\n");
+			  // Stay in JOINED state to retry
+		  }
 	  break;
 	  case LORAWAN_DATA_SENDING:
       break;
-
+	  case DEVICE_SLEEP:
+		  // Eren can do sleep, no clue how, expecially with the atc lib.
+		  HAL_Delay(10000); //simulate 10 second sleep
+		  lorawan_state = COLLECT_DATA;
+	  break;
+	  case COLLECT_DATA:
+		  // do sensorin data collection here!!!
+		  break;
 	  }
   }
   /* USER CODE END 3 */
@@ -332,6 +426,35 @@ void SystemClock_Config(void)
 //
 //	return error;
 //}
+
+// Function to process the received downlink data
+void process_downlink_data(const char* hex_data, int data_length, int port) {
+    if (data_length == 0) {
+        return;
+    }
+    
+    // Convert hex string to bytes for processing
+    uint8_t bytes[128]; // Buffer for converted bytes
+    int byte_count = 0;
+    
+    for (int i = 0; i < strlen(hex_data) && i < sizeof(bytes) * 2; i += 2) {
+        char hex_byte[3] = {hex_data[i], hex_data[i+1], '\0'};
+        bytes[byte_count] = (uint8_t)strtol(hex_byte, NULL, 16);
+        byte_count++;
+    }
+    
+    // Process data based on port number
+    switch (port) {
+        case 1:
+            // Port 1: Configuration commands
+            // Change uplink interval, min 5 minutes, max 1hr
+            break;
+            
+        default:
+            // return maybe???
+            break;
+    }
+}
 
 /* USER CODE END 4 */
 
