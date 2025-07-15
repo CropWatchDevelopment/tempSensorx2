@@ -46,7 +46,6 @@ static LoRaWAN_Error_t set_class_a(ATC_HandleTypeDef *lora);
 static LoRaWAN_Error_t set_data_rate(ATC_HandleTypeDef *lora, int dr);
 static LoRaWAN_Error_t set_tx_power(ATC_HandleTypeDef *lora, int power);
 static LoRaWAN_Error_t factor_reset(ATC_HandleTypeDef *lora);
-//static LoRaWAN_Error_t join_network(ATC_HandleTypeDef *lora);
 
 /**
  * @brief Configures the RM126x LoRaWAN module for Japan (AS923-1) with TTN and initiates network join.
@@ -466,7 +465,7 @@ static LoRaWAN_Error_t set_tx_power(ATC_HandleTypeDef *lora, int power) {
  * @param lora Pointer to the ATC handle for communication.
  * @return LORAWAN_OK on successful join, LORAWAN_ERR_JOIN or LORAWAN_ERR_AT_COMMAND on failure.
  */
-static LoRaWAN_Error_t join_network(ATC_HandleTypeDef *lora) {
+LoRaWAN_Error_t join_network(ATC_HandleTypeDef *lora) {
     char response[AT_RESPONSE_BUFFER_SIZE];
     char *response_ptr = response;
     int resp = ATC_SendReceive(lora, "AT+JOIN\r\n", 100, &response_ptr, JOIN_TIMEOUT_MS, 1, "OK");

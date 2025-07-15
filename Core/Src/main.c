@@ -83,7 +83,6 @@ typedef enum {
     LORAWAN_JOINING,
     LORAWAN_JOINED,
     LORAWAN_DATA_RECEIVED,
-	LORAWAN_DATA_RESPONSE,
 	LORAWAN_DATA_SENDING,
 	DEVICE_SLEEP,
 //	LORAWAN_MODULE_ERROR,
@@ -106,27 +105,26 @@ void cb_NOT_JOINED(const char* str)
 }
 void cb_DATA_SENT(const char* str)
 {
+	__NOP();
 //	switch(str)
 //	{
 //	case 'str'
 //	}
-	lorawan_state = LORAWAN_DATA_RECEIVED;
 }
-void cb_DATA_RESPONSE(const char* str)
+void cb_DATA_RECIEVED(const char* str)
 {
-	lorawan_state = LORAWAN_DATA_RESPONSE;
+	__NOP();
 }
 
 const ATC_EventTypeDef events[] = {
 
 	/*JOINING CALLBACKS*/
-    { "JOIN: [OK]",      cb_JOIN_SUCCESS        },
-	{ "JOIN: [FAIL]",    cb_NOT_JOINED          },
+    { "JOIN: [",         cb_JOIN_SUCCESS        },
     { "ERROR 81",        cb_NOT_JOINED          },
 
 	/* DATA TX/RX CALLBACKS */
 	{ "TX: [",           cb_DATA_SENT           }, //Datasheet Section: 5.2.10 TX
-    { "[RX]:",           cb_DATA_RESPONSE       },
+    { "[RX]:",           cb_DATA_RECIEVED       },
 
 	/* MODULE STATIS CALLBACKS */
     { "WAKE",            cb_WAKE                }, //Datasheet Section: 5.2.11 WAKE
@@ -207,47 +205,26 @@ int main(void)
 	  ATC_Loop(&lora);
 	  switch (lorawan_state) {
 	  case LORAWAN_NOT_JOINED:
-		{
-			join_network(&lora);
-			lorawan_state = LORAWAN_JOINING;
-			break;
-		}
+			LoRaWAN_Error_t join_result = join_network(&lora);
+			if (join_result == LORAWAN_OK) {
+				lorawan_state = LORAWAN_JOINING;
+				printf("DEBUG: Join command sent successfully\n");
+			} else {
+				printf("ERROR: Join command failed with error %d\n", join_result);
+				// Could implement retry logic here
+			}
+		break;
 	  case LORAWAN_JOINING:
-			ATC_Loop(&lora); // nothing to do, so lets just wait for the callback... is this right???
 		break;
 	  case LORAWAN_JOINED:
 		  // Ready to send data
+		  HAL_Delay(100); // wait a sec for reasons.
 		  resp = ATC_SendReceive(&lora, "AT+SEND \"AA\"\r\n", 200, NULL, 2000, 2, "OK");
 		  lorawan_state = LORAWAN_DATA_SENDING;
 	  break;
 	  case LORAWAN_DATA_SENDING:
-		  ATC_Loop(&lora); // also nothing to do, just wait for the callback
       break;
-//		  case LORAWAN_DATA_RESPONSE:
-//			  // Do something with the response data...
-//			  lorawan_state = DEVICE_SLEEP;
-//			  break;
-//		  case LORAWAN_DATA_SENDING:
-//			  ATC_Loop(&lora);
-//			  break;
-//		  case LORAWAN_DATA_RECEIVED:
-//			  // Data successfully sent/received, go back to joined or repeat
-//			  HAL_Delay(10000);
-//			  lorawan_state = LORAWAN_JOINED;
-//			  break;
-//		  case DEVICE_SLEEP:
-//
-//			  break;
-//		  case LORAWAN_MODULE_ERROR:
-//			  char *connection_status = NULL;
-//			  resp = ATC_SendReceive(&lora, "ATI 3001\r\n", 100, &connection_status, 200, 2, "\r\nOK");
-//			  if (resp > 0 && connection_status)
-//			  {
-//				  int status = atoi(connection_status);
-//				  if (status == 0) lorawan_state = LORAWAN_NOT_JOINED; // Retry join
-//				  if (status == 1) lorawan_state = LORAWAN_JOINED;
-//			  }
-//			  break;
+
 	  }
   }
   /* USER CODE END 3 */
