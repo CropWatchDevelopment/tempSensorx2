@@ -60,6 +60,7 @@
 /* USER CODE BEGIN PV */
 uint32_t join_start_time = 0;
 ATC_HandleTypeDef lora;
+bool AWAKE = false;
 int resp = 0;
 char respBuf[64];
 bool updated = false;
@@ -89,42 +90,46 @@ typedef enum {
 } LoRaWAN_State_t;
 volatile LoRaWAN_State_t lorawan_state = LORAWAN_NOT_JOINED;
 
-void cbWAKE(const char* str)
+void cb_WAKE(const char* str)
 {
-	loraWAKE = 1;
+	AWAKE = true;
+	// Start a timer to determine when the module will sleep again
+}
+
+void cb_JOIN_SUCCESS(const char* str)
+{
+	lorawan_state = LORAWAN_JOINED;
 }
 void cb_NOT_JOINED(const char* str)
 {
 	lorawan_state = LORAWAN_NOT_JOINED;
 }
-void cb_JOIN_SUCCESS(const char* str)
-{
-	lorawan_state = LORAWAN_JOINED;
-}
-//void cbError(const char* str)
-//{
-//	lorawan_state = LORAWAN_MODULE_ERROR;
-//}
 void cb_DATA_SENT(const char* str)
 {
+//	switch(str)
+//	{
+//	case 'str'
+//	}
 	lorawan_state = LORAWAN_DATA_RECEIVED;
 }
 void cb_DATA_RESPONSE(const char* str)
 {
 	lorawan_state = LORAWAN_DATA_RESPONSE;
 }
-void cbDebug(const char* str) {
-    // print each byte in hex so you can see those hidden prefix chars
-    for (const char*p=str; *p; p++) printf("%02X ", (unsigned char)*p);
-    printf("\n");
-}
+
 const ATC_EventTypeDef events[] = {
-	// { "",       cbDebug    },  // match everything
-    { "JOIN: [",      cb_JOIN_SUCCESS   },  // catches “JOIN: [OK], …”
-    { "ERROR 81",     cb_NOT_JOINED     },  // join-fail code
-	{ "TX: [",        cb_DATA_SENT      },
-    { "[RX]:",        cb_DATA_RESPONSE  },  // downlink received
-    { "WAKE",         cbWAKE            },  // UART wake message
+
+	/*JOINING CALLBACKS*/
+    { "JOIN: [OK]",      cb_JOIN_SUCCESS        },
+	{ "JOIN: [FAIL]",    cb_NOT_JOINED          },
+    { "ERROR 81",        cb_NOT_JOINED          },
+
+	/* DATA TX/RX CALLBACKS */
+	{ "TX: [",           cb_DATA_SENT           }, //Datasheet Section: 5.2.10 TX
+    { "[RX]:",           cb_DATA_RESPONSE       },
+
+	/* MODULE STATIS CALLBACKS */
+    { "WAKE",            cb_WAKE                }, //Datasheet Section: 5.2.11 WAKE
 };
 /* USER CODE END PV */
 
@@ -186,7 +191,6 @@ int main(void)
   const char *dev_eui = "0025CA00000055EE"; // Replace with your DevEUI
   const char *app_eui = "0025CA00000055EE"; // Replace with your AppEUI
   const char *app_key = "2B7E151628AED2A6ABF7158809CF4F3C"; // Test key - replace with your real AppKey
-
   if (lorawan_configure(&lora, dev_eui, app_eui, app_key)) {
       printf("LoRaWAN configuration successful\n");
   } else {
@@ -201,32 +205,24 @@ int main(void)
 
     /* USER CODE BEGIN 3 */
 	  ATC_Loop(&lora);
-//	  switch (lorawan_state) {
-//	  case LORAWAN_NOT_JOINED:
-//		{
-//		  char *connection_result = NULL;
-//		  join_start_time = HAL_GetTick();  // ← timestamp first
-//		  ATC_SendReceive(&lora,
-//						  "AT+JOIN\r\n",
-//						  100,
-//						  &connection_result,
-//						  500,
-//						  1,
-//						  "OK");
-//		  lorawan_state = LORAWAN_JOINING;
-//		}
-//		break;
-//		  case LORAWAN_JOINING:
-//			  if ((HAL_GetTick() - join_start_time) >= LORAWAN_JOIN_TIMEOUT_MS)
-//			          {
-//			            lorawan_state = LORAWAN_NOT_JOINED; // retry
-//			          }
-//			  break;
-//		  case LORAWAN_JOINED:
-//			  // Ready to send data
-//			  resp = ATC_SendReceive(&lora, "AT+SEND \"AA\"\r\n", 200, NULL, 2000, 2, "OK");
-//			  lorawan_state = LORAWAN_DATA_SENDING;
-//			  break;
+	  switch (lorawan_state) {
+	  case LORAWAN_NOT_JOINED:
+		{
+			join_network(&lora);
+			lorawan_state = LORAWAN_JOINING;
+			break;
+		}
+	  case LORAWAN_JOINING:
+			ATC_Loop(&lora); // nothing to do, so lets just wait for the callback... is this right???
+		break;
+	  case LORAWAN_JOINED:
+		  // Ready to send data
+		  resp = ATC_SendReceive(&lora, "AT+SEND \"AA\"\r\n", 200, NULL, 2000, 2, "OK");
+		  lorawan_state = LORAWAN_DATA_SENDING;
+	  break;
+	  case LORAWAN_DATA_SENDING:
+		  ATC_Loop(&lora); // also nothing to do, just wait for the callback
+      break;
 //		  case LORAWAN_DATA_RESPONSE:
 //			  // Do something with the response data...
 //			  lorawan_state = DEVICE_SLEEP;
@@ -252,7 +248,7 @@ int main(void)
 //				  if (status == 1) lorawan_state = LORAWAN_JOINED;
 //			  }
 //			  break;
-//	  }
+	  }
   }
   /* USER CODE END 3 */
 }
