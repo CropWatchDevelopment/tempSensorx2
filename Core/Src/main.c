@@ -112,7 +112,7 @@ void cb_NOT_JOINED(const char* str)
 }
 void cb_DATA_RESPONSE(const char* str)
 {
-    printf("DEBUG: Data response received: %s\n", str);
+  __NOP();
     // You can parse downlink data here if needed
 }
 
@@ -182,7 +182,22 @@ int main(void)
   MX_I2C1_Init();
   MX_LPUART1_UART_Init();
   /* USER CODE BEGIN 2 */
-  ATC_Init(&lora, &hlpuart1, 512, "LoRaWAN");
+  printf("DEBUG: Starting ATC initialization\n");
+  
+  // Check LPUART handle before passing to ATC_Init
+  if (hlpuart1.Instance == NULL) {
+      printf("ERROR: hlpuart1.Instance is NULL! LPUART not initialized properly.\n");
+      Error_Handler();
+  }
+  printf("DEBUG: hlpuart1.Instance = %p\n", (void*)hlpuart1.Instance);
+  
+  bool atc_init_result = ATC_Init(&lora, &hlpuart1, 512, "LoRaWAN");
+  if (!atc_init_result) {
+      printf("ERROR: ATC_Init failed!\n");
+      Error_Handler();
+  }
+  printf("DEBUG: ATC_Init successful\n");
+  
   ATC_SetEvents(&lora, events);
   scan_i2c_bus(); // Check what devices exist
   sensirion_i2c_hal_init();
@@ -190,6 +205,8 @@ int main(void)
   const char *dev_eui = "0025CA00000055EE";
   const char *app_eui = "0025CA00000055EE";
   const char *app_key = "2B7E151628AED2A6ABF7158809CF4F3C";
+  
+  printf("DEBUG: Configuring LoRaWAN parameters\n");
   if (lorawan_configure(&lora, dev_eui, app_eui, app_key)) {
       printf("LoRaWAN configuration successful\n");
   } else {
@@ -198,22 +215,11 @@ int main(void)
 
   /* Infinite loop */
   /* USER CODE BEGIN WHILE */
-  printf("DEBUG: Entering main loop\n");
   while (1)
   {
     /* USER CODE END WHILE */
 
     /* USER CODE BEGIN 3 */
-	  // Validate lora handle before calling ATC_Loop
-	  if (lora.hUart == NULL) {
-		  printf("ERROR: lora.hUart is NULL!\n");
-		  Error_Handler();
-	  }
-	  if (lora.pRxBuff == NULL) {
-		  printf("ERROR: lora.pRxBuff is NULL!\n");
-		  Error_Handler();
-	  }
-	  
 	  printf("DEBUG: About to call ATC_Loop\n");
 	  ATC_Loop(&lora);
 	  printf("DEBUG: ATC_Loop completed successfully\n");
