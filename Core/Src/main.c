@@ -55,6 +55,10 @@
 /* USER CODE BEGIN PD */
 #define LORAWAN_JOIN_TIMEOUT_MS ((uint32_t)10000)  // 15 seconds, I think....
 #define sensirion_hal_sleep_us sensirion_i2c_hal_sleep_usec
+
+// LORAWAN Send Related
+#define MAX_HEX_LEN 8  // For uint32_t = 8 hex chars
+#define CMD_BUF_SIZE 32  // Enough space for full command
 /* USER CODE END PD */
 
 /* Private macro -------------------------------------------------------------*/
@@ -74,6 +78,7 @@ bool updated = false;
 int rcv = 0;
 int loraWAKE = 0;
 int loraErr = 0;
+char at_command[CMD_BUF_SIZE];
 
 // LoRaWAN transmission status
 typedef enum {
@@ -244,7 +249,7 @@ int main(void)
 		  last_tx_status = TX_STATUS_UNKNOWN; // Reset status before sending
 
 		  char* CONNECTION_STATUS = NULL;
-		  resp = ATC_SendReceive(&lora, "ATI 3001\r\n", 200, CONNECTION_STATUS, 2000, 2, "\r0\n", "\r1\n");
+		  resp = ATC_SendReceive(&lora, "ATI 3001\r\n", 200, &CONNECTION_STATUS, 2000, 2, "0\r", "1");
 		  if (CONNECTION_STATUS == 0)
 		  {
 			  lorawan_state = LORAWAN_NOT_JOINED;
@@ -252,8 +257,7 @@ int main(void)
 		  }
 
 		  char* ATSEND_Result = NULL;
-		  int a = 12;
-		  resp = ATC_SendReceive(&lora, "AT+SEND \"AA\"\r\n", 200, &ATSEND_Result, 2000, 2, "OK");
+		  resp = ATC_SendReceive(&lora, at_command, 200, &ATSEND_Result, 2000, 2, "OK");
 		  if (resp == 0) {
 			  lorawan_state = LORAWAN_DATA_SENDING;
 			  printf("DEBUG: Send command accepted\n");
@@ -279,8 +283,21 @@ int main(void)
 			  printf("ERROR: Sensor data collection failed with error %d\n", sensor_result);
 		  }
 		  
-		  HAL_Delay(1000); // Small delay
-		  lorawan_state = LORAWAN_JOINED; // Go back to send data
+//		  HAL_Delay(1000); // Small delay
+//		  char* CONNECTION_STATUS_ON_COLLECTION = NULL;
+//		  resp = ATC_SendReceive(&lora, "ATI 3001\r\n", 200, CONNECTION_STATUS_ON_COLLECTION, 2000, 2, "\r0\n", "\r1\n");
+//		  if (CONNECTION_STATUS == 0)
+//		  {
+//			  lorawan_state = LORAWAN_NOT_JOINED;
+//		  }
+//		  else
+//		  {
+//			  lorawan_state = LORAWAN_JOINED;
+//		  }
+		  lorawan_state = LORAWAN_JOINED;
+
+		  uint16_t sensor_val = temp_ticks_2;
+		  format_at_send_cmd(sensor_val, 4, at_command);
 		  break;
 	  }
   }

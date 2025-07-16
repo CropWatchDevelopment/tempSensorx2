@@ -32,5 +32,7 @@ bool lorawan_configure(ATC_HandleTypeDef *lora, const char *dev_eui, const char 
  * @return LORAWAN_OK on success, error code on failure
  */
 LoRaWAN_Error_t join_network(ATC_HandleTypeDef *lora);
+void to_hex_str(uint32_t value, uint8_t width, char *output);
+void format_at_send_cmd(uint32_t data, uint8_t hex_digits, char *out_buf);
 
 #endif // LORAWAN_CONFIG_H
