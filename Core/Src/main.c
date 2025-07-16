@@ -257,8 +257,8 @@ int main(void)
 		  }
 
 		  char* ATSEND_Result = NULL;
-		  resp = ATC_SendReceive(&lora, at_command, 200, &ATSEND_Result, 2000, 2, "OK");
-		  if (resp == 0) {
+		  resp = ATC_SendReceive(&lora, at_command, 200, &ATSEND_Result, 2000, 2, "OK\r", "ERROR");
+		  if (resp == 1) {
 			  lorawan_state = LORAWAN_DATA_SENDING;
 			  printf("DEBUG: Send command accepted\n");
 		  } else {
