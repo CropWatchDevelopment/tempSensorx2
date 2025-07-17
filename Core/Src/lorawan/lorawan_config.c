@@ -514,3 +514,23 @@ static LoRaWAN_Error_t save_and_reset(ATC_HandleTypeDef *lora) {
 
     return LORAWAN_OK;
 }
+
+void to_hex_str(uint32_t value, uint8_t width, char *output) {
+    const char hex_chars[] = "0123456789ABCDEF";
+    for (int i = width - 1; i >= 0; --i) {
+        output[i] = hex_chars[value & 0xF];
+        value >>= 4;
+    }
+    output[width] = '\0';
+}
+
+void format_at_send_cmd(uint32_t data, uint8_t hex_digits, char *out_buf) {
+    char hex_str[33];  // hex + null
+    to_hex_str(data, hex_digits, hex_str);
+
+    // Format command: AT+SEND "HEXDATA"\r\n
+    char *p = out_buf;
+    strcpy(p, "AT+SEND \""); p += 9;
+    strcpy(p, hex_str);     p += hex_digits;
+    strcpy(p, "\"\r\n");    // terminate
+}

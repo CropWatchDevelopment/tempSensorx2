@@ -14,3 +14,5 @@
 ../Core/Src/lorawan/lorawan_config.c:468:17:join_network	2
 ../Core/Src/lorawan/lorawan_config.c:487:24:factor_reset	3
 ../Core/Src/lorawan/lorawan_config.c:504:24:save_and_reset	3
+../Core/Src/lorawan/lorawan_config.c:518:6:to_hex_str	2
+../Core/Src/lorawan/lorawan_config.c:527:6:format_at_send_cmd	1

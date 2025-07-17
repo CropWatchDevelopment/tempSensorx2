@@ -1,0 +1,2 @@
+../Core/Src/sensirion/sensirion.c:17:6:scan_i2c_bus	7
+../Core/Src/sensirion/sensirion.c:53:5:sensor_init_and_read	8

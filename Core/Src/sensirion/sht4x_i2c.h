@@ -44,9 +44,9 @@ extern "C" {
 #endif
 
 #include "sensirion_config.h"
-#define SHT40_I2C_ADDR_44 0x44    // OUR Sensor 2
+#define SHT40_I2C_ADDR_44 0x44
 #define SHT40_I2C_ADDR_45 0x45
-#define SHT40_I2C_ADDR_46 0x46
+#define SHT40_I2C_ADDR_46 0x46    // OUR Sensor 2
 #define SHT43_I2C_ADDR_44 0x44    // OUR Sensor 1
 #define SHT45_I2C_ADDR_44 0x44
 #define SHT45_I2C_ADDR_45 0x45

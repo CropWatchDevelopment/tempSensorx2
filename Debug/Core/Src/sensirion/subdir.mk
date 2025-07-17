@@ -5,18 +5,21 @@
 
 # Add inputs and outputs from these tool invocations to the build variables 
 C_SRCS += \
+../Core/Src/sensirion/sensirion.c \
 ../Core/Src/sensirion/sensirion_common.c \
 ../Core/Src/sensirion/sensirion_i2c.c \
 ../Core/Src/sensirion/sensirion_i2c_hal.c \
 ../Core/Src/sensirion/sht4x_i2c.c 
 
 OBJS += \
+./Core/Src/sensirion/sensirion.o \
 ./Core/Src/sensirion/sensirion_common.o \
 ./Core/Src/sensirion/sensirion_i2c.o \
 ./Core/Src/sensirion/sensirion_i2c_hal.o \
 ./Core/Src/sensirion/sht4x_i2c.o 
 
 C_DEPS += \
+./Core/Src/sensirion/sensirion.d \
 ./Core/Src/sensirion/sensirion_common.d \
 ./Core/Src/sensirion/sensirion_i2c.d \
 ./Core/Src/sensirion/sensirion_i2c_hal.d \
@@ -30,7 +33,7 @@ Core/Src/sensirion/%.o Core/Src/sensirion/%.su Core/Src/sensirion/%.cyclo: ../Co
 clean: clean-Core-2f-Src-2f-sensirion
 
 clean-Core-2f-Src-2f-sensirion:
-	-$(RM) ./Core/Src/sensirion/sensirion_common.cyclo ./Core/Src/sensirion/sensirion_common.d ./Core/Src/sensirion/sensirion_common.o ./Core/Src/sensirion/sensirion_common.su ./Core/Src/sensirion/sensirion_i2c.cyclo ./Core/Src/sensirion/sensirion_i2c.d ./Core/Src/sensirion/sensirion_i2c.o ./Core/Src/sensirion/sensirion_i2c.su ./Core/Src/sensirion/sensirion_i2c_hal.cyclo ./Core/Src/sensirion/sensirion_i2c_hal.d ./Core/Src/sensirion/sensirion_i2c_hal.o ./Core/Src/sensirion/sensirion_i2c_hal.su ./Core/Src/sensirion/sht4x_i2c.cyclo ./Core/Src/sensirion/sht4x_i2c.d ./Core/Src/sensirion/sht4x_i2c.o ./Core/Src/sensirion/sht4x_i2c.su
+	-$(RM) ./Core/Src/sensirion/sensirion.cyclo ./Core/Src/sensirion/sensirion.d ./Core/Src/sensirion/sensirion.o ./Core/Src/sensirion/sensirion.su ./Core/Src/sensirion/sensirion_common.cyclo ./Core/Src/sensirion/sensirion_common.d ./Core/Src/sensirion/sensirion_common.o ./Core/Src/sensirion/sensirion_common.su ./Core/Src/sensirion/sensirion_i2c.cyclo ./Core/Src/sensirion/sensirion_i2c.d ./Core/Src/sensirion/sensirion_i2c.o ./Core/Src/sensirion/sensirion_i2c.su ./Core/Src/sensirion/sensirion_i2c_hal.cyclo ./Core/Src/sensirion/sensirion_i2c_hal.d ./Core/Src/sensirion/sensirion_i2c_hal.o ./Core/Src/sensirion/sensirion_i2c_hal.su ./Core/Src/sensirion/sht4x_i2c.cyclo ./Core/Src/sensirion/sht4x_i2c.d ./Core/Src/sensirion/sht4x_i2c.o ./Core/Src/sensirion/sht4x_i2c.su
 
 .PHONY: clean-Core-2f-Src-2f-sensirion
 
