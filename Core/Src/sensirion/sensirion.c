@@ -1,6 +1,5 @@
 #include "sensirion.h"
 #include "main.h"
-#include "gpio.h"
 #include "sensirion_common.h"
 #include "sensirion_i2c_hal.h"
 #include "sht4x_i2c.h"
@@ -23,16 +22,15 @@ void scan_i2c_bus(void)
 	has_sensor_2 = false;
 	
 	HAL_GPIO_WritePin(I2C_ENABLE_GPIO_Port, I2C_ENABLE_Pin, GPIO_PIN_SET);
-	printf("DEBUG: I2C power enabled\n");
+    uint8_t addr;
     HAL_Delay(100); // let bus settle
 
-    uint8_t addr;
     for (addr = 3; addr < 0x78; addr++)
     {
         // HAL expects 8-bit address = 7-bit << 1
         if (HAL_I2C_IsDeviceReady(&hi2c1, addr << 1, 1, 10) == HAL_OK)
         {
-        	printf("DEBUG: Found device at address 0x%02X\n", addr);
+        	printf("DEBUG: Device found at address 0x%02X\n", addr);
         	// SHT4x sensors use 7-bit addresses 0x44 and 0x46
         	if (addr == 0x44) {
         		has_sensor_1 = true;
@@ -58,8 +56,8 @@ int sensor_init_and_read(void)
 		return -1;
 	}
 	
-	HAL_GPIO_WritePin(I2C_ENABLE_GPIO_Port, I2C_ENABLE_Pin, GPIO_PIN_SET);
 	printf("DEBUG: I2C power enabled for sensor reading\n");
+	HAL_GPIO_WritePin(I2C_ENABLE_GPIO_Port, I2C_ENABLE_Pin, GPIO_PIN_SET);
 	error = NO_ERROR;
 	HAL_Delay(100); // Let power stabilize
 
@@ -75,10 +73,10 @@ int sensor_init_and_read(void)
 		sht4x_init(SHT43_I2C_ADDR_44);
 		printf("DEBUG: Reading measurement from sensor 1\n");
 		error = sht4x_measure_high_precision_ticks(&temp_ticks_1, &hum_ticks_1);
-		if (error != NO_ERROR) {
-			printf("ERROR: Sensor 1 measurement failed with error %d\n", error);
-		} else {
+		if (error == NO_ERROR) {
 			printf("DEBUG: Sensor 1 measurement successful - Temp: %u, Hum: %u\n", temp_ticks_1, hum_ticks_1);
+		} else {
+			printf("DEBUG: Sensor 1 measurement failed with error: %d\n", error);
 		}
 	}
 
@@ -94,16 +92,15 @@ int sensor_init_and_read(void)
 		sht4x_init(SHT40_I2C_ADDR_46);
 		printf("DEBUG: Reading measurement from sensor 2\n");
 		error = sht4x_measure_high_precision_ticks(&temp_ticks_2, &hum_ticks_2);
-		if (error != NO_ERROR) {
-			printf("ERROR: Sensor 2 measurement failed with error %d\n", error);
-		} else {
+		if (error == NO_ERROR) {
 			printf("DEBUG: Sensor 2 measurement successful - Temp: %u, Hum: %u\n", temp_ticks_2, hum_ticks_2);
-			temp_ticks_2 = ((temp_ticks_2 / 1000) * 100) + 55;
-			hum_ticks_2 = (hum_ticks_2 / 1000);
+		} else {
+			printf("DEBUG: Sensor 2 measurement failed with error: %d\n", error);
 		}
 	}
 
 	HAL_GPIO_WritePin(I2C_ENABLE_GPIO_Port, I2C_ENABLE_Pin, GPIO_PIN_RESET);
 
 	if (error) return (-200);
+	return error;
 }

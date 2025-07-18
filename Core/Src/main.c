@@ -181,6 +181,21 @@ int main(void)
   MX_RTC_Init();
   /* USER CODE BEGIN 2 */
 
+  // Initialize ATC LoRa handle
+  lora.hUart = &hlpuart1;
+  lora.psEvents = (ATC_EventTypeDef*)events;
+  lora.Events = sizeof(events) / sizeof(events[0]);
+  lora.Size = 256;  // Buffer size
+  lora.pRxBuff = malloc(lora.Size);
+  lora.pReadBuff = malloc(lora.Size);
+  lora.RxIndex = 0;
+  lora.RespCount = 0;
+  
+  // Initialize response pointers to NULL
+  for(int i = 0; i < 16; i++) {  // ATC_RESP_MAX is typically 16
+    lora.ppResp[i] = NULL;
+  }
+
   /* USER CODE END 2 */
 
   /* Infinite loop */
@@ -249,8 +264,8 @@ int main(void)
 	  case LORAWAN_DATA_RECEIVED:
 		  // Handle received data
 		  HAL_SuspendTick();
-	      HAL_RTCEx_SetWakeUpTimer_IT(&hrtc, 0x500B, RTC_WAKEUPCLOCK_RTCCLK_DIV16);
-	      HAL_PWREx_EnterSTOP2Mode(PWR_STOPENTRY_WFI);
+	      HAL_RTCEx_SetWakeUpTimer_IT(&hrtc, 119, RTC_WAKEUPCLOCK_RTCCLK_DIV16);
+	      HAL_PWR_EnterSTOPMode(PWR_LOWPOWERREGULATOR_ON, PWR_STOPENTRY_WFI);
 		  HAL_RTCEx_DeactivateWakeUpTimer(&hrtc);
 		  SystemClock_Config();
 		  HAL_ResumeTick();
