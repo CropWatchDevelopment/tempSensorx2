@@ -33,7 +33,7 @@
 
 /**
 	MiddleWare name : NimaLTD.I-CUBE-ATC.4.2.2
-	MiddleWare fileName : NimaLTD.I-CUBE-ATC_conf.h
+	MiddleWare fileName : ./NimaLTD.I-CUBE-ATC_conf.h
 */
 /*---------- ATC_DEBUG  -----------*/
 #define ATC_DEBUG      ATC_DEBUG_DISABLE

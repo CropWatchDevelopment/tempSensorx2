@@ -1,0 +1,8 @@
+../Core/Src/main.c:96:6:cb_WAKE	16	static
+../Core/Src/main.c:102:6:cb_JOIN_SUCCESS	16	static
+../Core/Src/main.c:106:6:cb_NOT_JOINED	16	static
+../Core/Src/main.c:110:6:cb_DATA_RESPONSE	16	static,ignoring_inline_asm
+../Core/Src/main.c:140:6:HAL_UARTEx_RxEventCallback	16	static
+../Core/Src/main.c:153:5:main	112	static
+../Core/Src/main.c:281:6:SystemClock_Config	136	static
+../Core/Src/main.c:337:6:Error_Handler	8	static,ignoring_inline_asm

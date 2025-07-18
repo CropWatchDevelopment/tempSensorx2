@@ -21,6 +21,7 @@
 #include "dma.h"
 #include "i2c.h"
 #include "usart.h"
+#include "rtc.h"
 #include "gpio.h"
 
 /* Private includes ----------------------------------------------------------*/
@@ -177,25 +178,11 @@ int main(void)
   MX_DMA_Init();
   MX_I2C1_Init();
   MX_LPUART1_UART_Init();
+  MX_RTC_Init();
   /* USER CODE BEGIN 2 */
-  // Initialize ATC (LoRaWAN communication)
-  if (!ATC_Init(&lora, &hlpuart1, 512, "LoRaWAN")) {
-      printf("ERROR: ATC_Init failed!\n");
-      Error_Handler();
-  }
 
-  // Set up event callbacks
-  ATC_SetEvents(&lora, events);
+  /* USER CODE END 2 */
 
-  // Initialize sensors
-  scan_i2c_bus();
-  sensirion_i2c_hal_init();
-
-  // Configure LoRaWAN parameters
-  const char *dev_eui = "0025CA00000055EE";
-  const char *app_eui = "0025CA00000055EE";  
-  const char *app_key = "2B7E151628AED2A6ABF7158809CF4F3C";
-  lorawan_configure(&lora, dev_eui, app_eui, app_key);
   /* Infinite loop */
   /* USER CODE BEGIN WHILE */
   while (1)
@@ -261,16 +248,16 @@ int main(void)
 		break;
 	  case LORAWAN_DATA_RECEIVED:
 		  // Handle received data
-		  printf("DEBUG: Data received from network\n");
+		  HAL_SuspendTick();
+	      HAL_RTCEx_SetWakeUpTimer_IT(&hrtc, 0x500B, RTC_WAKEUPCLOCK_RTCCLK_DIV16);
+	      HAL_PWREx_EnterSTOP2Mode(PWR_STOPENTRY_WFI);
+		  HAL_RTCEx_DeactivateWakeUpTimer(&hrtc);
+		  SystemClock_Config();
+		  HAL_ResumeTick();
 		  lorawan_state = DEVICE_SLEEP;
 		  break;
 	  case DEVICE_SLEEP:
-			HAL_RTCEx_SetWakeUpTimer_IT(&hrtc, 30, RTC_WAKEUPCLOCK_CK_SPRE_16BITS);
-			HAL_SuspendTick();
-			HAL_PWREx_EnterSTOP2Mode(PWR_STOPENTRY_WFI);
-			SystemClock_Config();
-			HAL_ResumeTick();
-			HAL_RTCEx_DeactivateWakeUpTimer(&hrtc);
+
 		  lorawan_state = COLLECT_DATA;
 	  break;
 	  case COLLECT_DATA:
@@ -304,7 +291,8 @@ void SystemClock_Config(void)
   /** Initializes the RCC Oscillators according to the specified parameters
   * in the RCC_OscInitTypeDef structure.
   */
-  RCC_OscInitStruct.OscillatorType = RCC_OSCILLATORTYPE_MSI;
+  RCC_OscInitStruct.OscillatorType = RCC_OSCILLATORTYPE_LSI|RCC_OSCILLATORTYPE_MSI;
+  RCC_OscInitStruct.LSIState = RCC_LSI_ON;
   RCC_OscInitStruct.MSIState = RCC_MSI_ON;
   RCC_OscInitStruct.MSICalibrationValue = 0;
   RCC_OscInitStruct.MSIClockRange = RCC_MSIRANGE_5;
@@ -327,9 +315,11 @@ void SystemClock_Config(void)
   {
     Error_Handler();
   }
-  PeriphClkInit.PeriphClockSelection = RCC_PERIPHCLK_LPUART1|RCC_PERIPHCLK_I2C1;
+  PeriphClkInit.PeriphClockSelection = RCC_PERIPHCLK_LPUART1|RCC_PERIPHCLK_I2C1
+                              |RCC_PERIPHCLK_RTC;
   PeriphClkInit.Lpuart1ClockSelection = RCC_LPUART1CLKSOURCE_PCLK1;
   PeriphClkInit.I2c1ClockSelection = RCC_I2C1CLKSOURCE_PCLK1;
+  PeriphClkInit.RTCClockSelection = RCC_RTCCLKSOURCE_LSI;
   if (HAL_RCCEx_PeriphCLKConfig(&PeriphClkInit) != HAL_OK)
   {
     Error_Handler();
