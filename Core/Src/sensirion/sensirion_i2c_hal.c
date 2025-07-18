@@ -33,9 +33,15 @@
 #include "sensirion_common.h"
 #include "sensirion_config.h"
 #include "sensirion_i2c_hal.h"
-#include "i2c.h"  // Include to get the external hi2c1 handle
+//#include <usart.h>
 #include <gpio.h>
 #include <stdio.h>
+
+/**
+ * @brief Clock configuration
+ * 
+ */
+void SystemClock_Config(void);
 
 /**
  * @brief Global buffer to format trace messages
@@ -49,23 +55,27 @@ uint8_t msgbuf[256];
  */
 void assert_failed(uint8_t* file, uint32_t line)
 {
-    printf("Assertion failed in file %s @ line %lu\n", (const char*)file, line);
-    printf("To continue you need to reset the board\n");
     while(1); // stop execution
 }
 
-// Use the external I2C handle from main application instead of creating our own
+
+
+/**
+ * Use external I2C instance that's already configured by the main system
+ * instead of creating a new one
+ */
+extern I2C_HandleTypeDef hi2c1;
 
 /**
  * Initialize all hard- and software components that are needed for the I2C
  * communication.
  * 
- * NOTE: This function is simplified since we use the I2C handle that's already
- * initialized by the main application.
+ * Note: I2C1 is already initialized by the main system, so we don't need
+ * to reinitialize it here. This prevents overwriting the proper configuration.
  */
 void sensirion_i2c_hal_init(void) {
-    // The I2C peripheral is already initialized by MX_I2C1_Init() in main
-    // No additional initialization needed here
+    // I2C1 is already properly initialized by MX_I2C1_Init() in main
+    // No additional initialization needed
 }
 
 

@@ -52,8 +52,7 @@ void* ATC_Malloc(size_t size)
 #elif (ATC_RTOS == ATC_RTOS_CMSIS_V1) || (ATC_RTOS == ATC_RTOS_CMSIS_V2)
   ptr = pvPortMalloc(size);
 #elif ATC_RTOS == ATC_RTOS_THREADX
-  // ThreadX not implemented
-  ptr = NULL;
+  ??
 #endif
   return ptr;
 }
@@ -69,7 +68,7 @@ void ATC_Free(void** ptr)
 #elif (ATC_RTOS == ATC_RTOS_CMSIS_V1) || (ATC_RTOS == ATC_RTOS_CMSIS_V2)
     vPortFree(*ptr);
 #elif ATC_RTOS == ATC_RTOS_THREADX
-    // ThreadX not implemented - do nothing
+    ??
 #endif
      *ptr = NULL;
   }

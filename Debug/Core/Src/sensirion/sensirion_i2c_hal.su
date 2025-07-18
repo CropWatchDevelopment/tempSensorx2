@@ -1,6 +1,6 @@
-../Core/Src/sensirion/sensirion_i2c_hal.c:50:6:assert_failed	16	static
-../Core/Src/sensirion/sensirion_i2c_hal.c:66:6:sensirion_i2c_hal_init	8	static
-../Core/Src/sensirion/sensirion_i2c_hal.c:75:6:sensirion_i2c_hal_free	8	static
-../Core/Src/sensirion/sensirion_i2c_hal.c:88:8:sensirion_i2c_hal_read	32	static
-../Core/Src/sensirion/sensirion_i2c_hal.c:104:8:sensirion_i2c_hal_write	32	static
-../Core/Src/sensirion/sensirion_i2c_hal.c:116:6:sensirion_i2c_hal_sleep_usec	24	static
+../Core/Src/sensirion/sensirion_i2c_hal.c:56:6:assert_failed	16	static
+../Core/Src/sensirion/sensirion_i2c_hal.c:76:6:sensirion_i2c_hal_init	8	static
+../Core/Src/sensirion/sensirion_i2c_hal.c:85:6:sensirion_i2c_hal_free	8	static
+../Core/Src/sensirion/sensirion_i2c_hal.c:98:8:sensirion_i2c_hal_read	32	static
+../Core/Src/sensirion/sensirion_i2c_hal.c:114:8:sensirion_i2c_hal_write	32	static
+../Core/Src/sensirion/sensirion_i2c_hal.c:126:6:sensirion_i2c_hal_sleep_usec	24	static
