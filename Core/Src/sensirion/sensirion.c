@@ -98,8 +98,8 @@ int sensor_init_and_read(void)
 			printf("ERROR: Sensor 2 measurement failed with error %d\n", error);
 		} else {
 			printf("DEBUG: Sensor 2 measurement successful - Temp: %u, Hum: %u\n", temp_ticks_2, hum_ticks_2);
-			temp_ticks_2 = temp_ticks_2 / 1000;
-			hum_ticks_2 = hum_ticks_2 / 1000;
+			temp_ticks_2 = ((temp_ticks_2 / 1000) * 100) + 55;
+			hum_ticks_2 = (hum_ticks_2 / 1000);
 		}
 	}
 

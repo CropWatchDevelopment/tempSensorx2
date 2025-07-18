@@ -2,13 +2,7 @@
 /**
   ******************************************************************************
   * @file           : main.c
-  * @brief          : Main prog  ATC_Init(&lora, &hlpuart1, 512, "LoRaWAN");
-  ATC_SetEvents(&lora, events);
-  
-  // Initialize I2C and scan for sensors
-  printf("DEBUG: Initializing I2C sensors\n");
-  scan_i2c_bus(); // Check what devices exist
-  sensirion_i2c_hal_init(); // Initialize sensirion I2C layerbody
+  * @brief          : Main program body
   ******************************************************************************
   * @attention
   *
@@ -55,10 +49,6 @@
 /* USER CODE BEGIN PD */
 #define LORAWAN_JOIN_TIMEOUT_MS ((uint32_t)10000)  // 15 seconds, I think....
 #define sensirion_hal_sleep_us sensirion_i2c_hal_sleep_usec
-
-// LORAWAN Send Related
-#define MAX_HEX_LEN 8  // For uint32_t = 8 hex chars
-#define CMD_BUF_SIZE 32  // Enough space for full command
 /* USER CODE END PD */
 
 /* Private macro -------------------------------------------------------------*/
@@ -78,7 +68,8 @@ bool updated = false;
 int rcv = 0;
 int loraWAKE = 0;
 int loraErr = 0;
-char at_command[CMD_BUF_SIZE];
+
+uint32_t data_sending_start_time = 0; // Add timer variable for data sending
 
 // LoRaWAN transmission status
 typedef enum {
@@ -129,8 +120,8 @@ const ATC_EventTypeDef events[] = {
     { "ERROR 81",        cb_NOT_JOINED          },
 
 	/* DATA TX/RX CALLBACKS */
-//	{ "TX: [",           cb_DATA_SENT           }, //Datasheet Section: 5.2.10 TX
-    { "RX: W",           cb_DATA_RESPONSE       },
+	{ "TX: [",           cb_DATA_RESPONSE       }, //Datasheet Section: 5.2.10 TX
+    { "RX: W:",          cb_DATA_RESPONSE       },
 
 	/* MODULE STATUS CALLBACKS */
     { "WAKE",            cb_WAKE                }, //Datasheet Section: 5.2.11 WAKE
@@ -187,37 +178,24 @@ int main(void)
   MX_I2C1_Init();
   MX_LPUART1_UART_Init();
   /* USER CODE BEGIN 2 */
-  printf("DEBUG: Starting ATC initialization\n");
-  
-  // Check LPUART handle before passing to ATC_Init
-  if (hlpuart1.Instance == NULL) {
-      printf("ERROR: hlpuart1.Instance is NULL! LPUART not initialized properly.\n");
-      Error_Handler();
-  }
-  printf("DEBUG: hlpuart1.Instance = %p\n", (void*)hlpuart1.Instance);
-  
-  bool atc_init_result = ATC_Init(&lora, &hlpuart1, 512, "LoRaWAN");
-  if (!atc_init_result) {
+  // Initialize ATC (LoRaWAN communication)
+  if (!ATC_Init(&lora, &hlpuart1, 512, "LoRaWAN")) {
       printf("ERROR: ATC_Init failed!\n");
       Error_Handler();
   }
-  printf("DEBUG: ATC_Init successful\n");
-  
+
+  // Set up event callbacks
   ATC_SetEvents(&lora, events);
-  scan_i2c_bus(); // Check what devices exist
+
+  // Initialize sensors
+  scan_i2c_bus();
   sensirion_i2c_hal_init();
 
+  // Configure LoRaWAN parameters
   const char *dev_eui = "0025CA00000055EE";
-  const char *app_eui = "0025CA00000055EE";
+  const char *app_eui = "0025CA00000055EE";  
   const char *app_key = "2B7E151628AED2A6ABF7158809CF4F3C";
-  
-  printf("DEBUG: Configuring LoRaWAN parameters\n");
-  if (lorawan_configure(&lora, dev_eui, app_eui, app_key)) {
-      printf("LoRaWAN configuration successful\n");
-  } else {
-      printf("LoRaWAN configuration failed\n");
-  }
-
+  lorawan_configure(&lora, dev_eui, app_eui, app_key);
   /* Infinite loop */
   /* USER CODE BEGIN WHILE */
   while (1)
@@ -225,9 +203,7 @@ int main(void)
     /* USER CODE END WHILE */
 
     /* USER CODE BEGIN 3 */
-	  printf("DEBUG: About to call ATC_Loop\n");
 	  ATC_Loop(&lora);
-	  printf("DEBUG: ATC_Loop completed successfully\n");
 	  switch (lorawan_state) {
 	  case LORAWAN_NOT_JOINED:
 		{
@@ -256,6 +232,11 @@ int main(void)
 			  break;
 		  }
 
+		  // Create AT command with sensor data
+		  char at_command[64];
+		  uint16_t sensor_val = temp_ticks_2; // Use sensor data
+		  format_at_send_cmd(sensor_val, 4, at_command);
+
 		  char* ATSEND_Result = NULL;
 		  resp = ATC_SendReceive(&lora, at_command, 200, &ATSEND_Result, 2000, 2, "OK\r", "ERROR");
 		  if (resp == 1) {
@@ -266,38 +247,40 @@ int main(void)
 		  }
 	  break;
 	  case LORAWAN_DATA_SENDING:
-      break;
+			// Start timer when entering this state
+			if (data_sending_start_time == 0) {
+				data_sending_start_time = HAL_GetTick();
+			}
+
+			// Check if 10 seconds have passed
+			if ((HAL_GetTick() - data_sending_start_time) >= 10000) {
+				printf("DEBUG: Data sending timeout - going to sleep\n");
+				data_sending_start_time = 0; // Reset timer
+				lorawan_state = DEVICE_SLEEP;
+			}
+		break;
+	  case LORAWAN_DATA_RECEIVED:
+		  // Handle received data
+		  printf("DEBUG: Data received from network\n");
+		  lorawan_state = DEVICE_SLEEP;
+		  break;
 	  case DEVICE_SLEEP:
-		  // Eren can do sleep, no clue how, expecially with the atc lib.
-		  HAL_Delay(10000); //simulate 10 second sleep
+			HAL_RTCEx_SetWakeUpTimer_IT(&hrtc, 30, RTC_WAKEUPCLOCK_CK_SPRE_16BITS);
+			HAL_SuspendTick();
+			HAL_PWREx_EnterSTOP2Mode(PWR_STOPENTRY_WFI);
+			SystemClock_Config();
+			HAL_ResumeTick();
+			HAL_RTCEx_DeactivateWakeUpTimer(&hrtc);
 		  lorawan_state = COLLECT_DATA;
 	  break;
 	  case COLLECT_DATA:
-		  printf("DEBUG: COLLECT_DATA state - starting sensor operations\n");
-		  
-		  // Call sensor initialization and reading
-		  int sensor_result = sensor_init_and_read();
-		  if (sensor_result == NO_ERROR) {
-			  printf("DEBUG: Sensor data collected successfully\n");
-		  } else {
-			  printf("ERROR: Sensor data collection failed with error %d\n", sensor_result);
+		  // Scan for sensors and read data
+		  scan_i2c_bus();
+		  if (has_sensor_1 || has_sensor_2) {
+			  sensor_init_and_read();
+			  printf("DEBUG: Sensor data collected\n");
 		  }
-		  
-//		  HAL_Delay(1000); // Small delay
-//		  char* CONNECTION_STATUS_ON_COLLECTION = NULL;
-//		  resp = ATC_SendReceive(&lora, "ATI 3001\r\n", 200, CONNECTION_STATUS_ON_COLLECTION, 2000, 2, "\r0\n", "\r1\n");
-//		  if (CONNECTION_STATUS == 0)
-//		  {
-//			  lorawan_state = LORAWAN_NOT_JOINED;
-//		  }
-//		  else
-//		  {
-//			  lorawan_state = LORAWAN_JOINED;
-//		  }
-		  lorawan_state = LORAWAN_JOINED;
-
-		  uint16_t sensor_val = temp_ticks_2;
-		  format_at_send_cmd(sensor_val, 4, at_command);
+		  lorawan_state = LORAWAN_JOINED; // Go back to send data
 		  break;
 	  }
   }
