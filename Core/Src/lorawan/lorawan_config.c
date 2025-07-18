@@ -48,7 +48,6 @@ bool lorawan_configure(ATC_HandleTypeDef *lora, const char *dev_eui, const char 
     if ((err = set_dev_eui(lora, dev_eui)) != LORAWAN_OK ||
         (err = set_app_eui(lora, app_eui)) != LORAWAN_OK ||
         (err = set_app_key(lora, app_key)) != LORAWAN_OK) {
-        printf("Error setting EUIs or AppKey: %d\n", err);
         return false;
     }
 

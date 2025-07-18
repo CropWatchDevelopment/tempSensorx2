@@ -55,8 +55,6 @@ uint8_t msgbuf[256];
  */
 void assert_failed(uint8_t* file, uint32_t line)
 {
-    printf("Assertion failed in file %s @ line %lu\n", (const char*)file, line);
-    printf("To continue you need to reset the board\n");
     while(1); // stop execution
 }
 

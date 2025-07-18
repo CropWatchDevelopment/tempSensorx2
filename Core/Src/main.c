@@ -3,8 +3,18 @@
   ******************************************************************************
   * @file           : main.c
   * @brief          : Main program body
-  ******************************************************************************
-  * @attention
+  ****************************************************************************	  case LORAWAN_DATA_SENDING:
+			// Start timer when entering this state
+			if (data_sending_start_time == 0) {
+				data_sending_start_time = HAL_GetTick();
+			}
+
+			// Check if 10 seconds have passed
+			if ((HAL_GetTick() - data_sending_start_time) >= 10000) {
+				data_sending_start_time = 0; // Reset timer
+				lorawan_state = ENTER_SLEEP_MODE;  // Go to sleep mode
+			}
+		break;ntion
   *
   * Copyright (c) 2025 STMicroelectronics.
   * All rights reserved.
@@ -87,6 +97,7 @@ typedef enum {
     LORAWAN_JOINED,
     LORAWAN_DATA_RECEIVED,
 	LORAWAN_DATA_SENDING,
+	ENTER_SLEEP_MODE,
 	DEVICE_SLEEP,
 	COLLECT_DATA,
 //	LORAWAN_MODULE_ERROR,
@@ -109,8 +120,11 @@ void cb_NOT_JOINED(const char* str)
 }
 void cb_DATA_RESPONSE(const char* str)
 {
-  __NOP();
-    // You can parse downlink data here if needed
+  // Check if this is a TX confirmation
+  if (strstr(str, "TX:") != NULL) {
+    lorawan_state = ENTER_SLEEP_MODE;
+  }
+  // You can parse downlink data here if needed
 }
 
 const ATC_EventTypeDef events[] = {
@@ -143,6 +157,15 @@ void HAL_UARTEx_RxEventCallback(UART_HandleTypeDef *huart, uint16_t Size)
 	{
 		ATC_IdleLineCallback(&lora, Size);
 	}
+}
+
+/**
+ * @brief RTC Wake-up Timer Event Callback
+ * This function is called when the RTC wake-up timer expires
+ */
+void HAL_RTCEx_WakeUpTimerEventCallback(RTC_HandleTypeDef *hrtc)
+{
+	// The main loop will handle the state transition
 }
 /* USER CODE END 0 */
 
@@ -212,9 +235,7 @@ int main(void)
 			LoRaWAN_Error_t join_result = join_network(&lora);
 			if (join_result == LORAWAN_OK) {
 				lorawan_state = LORAWAN_JOINING;
-				printf("DEBUG: Join command sent successfully\n");
 			} else {
-				printf("ERROR: Join command failed with error %d\n", join_result);
 				// Could implement retry logic here
 			}
 		}
@@ -243,7 +264,6 @@ int main(void)
 		  resp = ATC_SendReceive(&lora, at_command, 200, &ATSEND_Result, 2000, 2, "OK\r", "ERROR");
 		  if (resp == 1) {
 			  lorawan_state = LORAWAN_DATA_SENDING;
-			  printf("DEBUG: Send command accepted\n");
 		  } else {
 			  lorawan_state = LORAWAN_NOT_JOINED;
 		  }
@@ -256,23 +276,41 @@ int main(void)
 
 			// Check if 10 seconds have passed
 			if ((HAL_GetTick() - data_sending_start_time) >= 10000) {
-				printf("DEBUG: Data sending timeout - going to sleep\n");
 				data_sending_start_time = 0; // Reset timer
-				lorawan_state = DEVICE_SLEEP;
+				lorawan_state = ENTER_SLEEP_MODE;  // Go directly to sleep, not DEVICE_SLEEP
 			}
 		break;
 	  case LORAWAN_DATA_RECEIVED:
-		  // Handle received data
+		  // Handle received downlink data (this is only for actual downlink messages)
+		  lorawan_state = ENTER_SLEEP_MODE;
+		  break;
+	  case ENTER_SLEEP_MODE:
+		  // For now, let's test without actual sleep mode to isolate the issue
+		  
+		  // Use a simple delay instead of sleep mode for testing
+		  HAL_Delay(5000);
+		  
+		  // Comment out the sleep code for now
+		  /*
 		  HAL_SuspendTick();
-	      HAL_RTCEx_SetWakeUpTimer_IT(&hrtc, 119, RTC_WAKEUPCLOCK_RTCCLK_DIV16);
+		  
+		  HAL_StatusTypeDef timer_status = HAL_RTCEx_SetWakeUpTimer_IT(&hrtc, 5, RTC_WAKEUPCLOCK_RTCCLK_DIV16);
+		  if (timer_status != HAL_OK) {
+			  HAL_ResumeTick();
+			  lorawan_state = DEVICE_SLEEP;
+			  break;
+		  }
+	      
 	      HAL_PWR_EnterSTOPMode(PWR_LOWPOWERREGULATOR_ON, PWR_STOPENTRY_WFI);
+	      
 		  HAL_RTCEx_DeactivateWakeUpTimer(&hrtc);
 		  SystemClock_Config();
 		  HAL_ResumeTick();
+		  */
+		  
 		  lorawan_state = DEVICE_SLEEP;
 		  break;
 	  case DEVICE_SLEEP:
-
 		  lorawan_state = COLLECT_DATA;
 	  break;
 	  case COLLECT_DATA:
@@ -280,7 +318,6 @@ int main(void)
 		  scan_i2c_bus();
 		  if (has_sensor_1 || has_sensor_2) {
 			  sensor_init_and_read();
-			  printf("DEBUG: Sensor data collected\n");
 		  }
 		  lorawan_state = LORAWAN_JOINED; // Go back to send data
 		  break;
