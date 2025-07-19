@@ -104,6 +104,10 @@ typedef enum {
 } LoRaWAN_State_t;
 volatile LoRaWAN_State_t lorawan_state = COLLECT_DATA;
 
+// --- Add for STOP mode sleep management ---
+volatile uint8_t sleep_cycles = 0;
+volatile uint8_t sleep_wakeup_flag = 0;
+
 void cb_WAKE(const char* str)
 {
 	AWAKE = true;
@@ -120,6 +124,7 @@ void cb_NOT_JOINED(const char* str)
 }
 void cb_DATA_RESPONSE(const char* str)
 {
+	HAL_Delay(5000);
   // Check if this is a TX confirmation
   if (strstr(str, "TX:") != NULL) {
     lorawan_state = ENTER_SLEEP_MODE;
@@ -136,7 +141,8 @@ const ATC_EventTypeDef events[] = {
 
 	/* DATA TX/RX CALLBACKS */
 	{ "TX: [",           cb_DATA_RESPONSE       }, //Datasheet Section: 5.2.10 TX
-    { "RX: W:",          cb_DATA_RESPONSE       },
+    // "RX: W:",          cb_DATA_RESPONSE       },
+	{ "ADRX: DR:",       cb_DATA_RESPONSE       },
 
 	/* MODULE STATUS CALLBACKS */
     { "WAKE",            cb_WAKE                }, //Datasheet Section: 5.2.11 WAKE
@@ -165,7 +171,9 @@ void HAL_UARTEx_RxEventCallback(UART_HandleTypeDef *huart, uint16_t Size)
  */
 void HAL_RTCEx_WakeUpTimerEventCallback(RTC_HandleTypeDef *hrtc)
 {
-	// The main loop will handle the state transition
+    // Set flag to indicate wakeup
+    sleep_wakeup_flag = 1;
+    if (sleep_cycles > 0) sleep_cycles--;
 }
 /* USER CODE END 0 */
 
@@ -219,6 +227,13 @@ int main(void)
     lora.ppResp[i] = NULL;
   }
 
+	//CONFIGURE LORAWAN STUFF:
+	lorawan_configure(
+			&lora,
+			"0025CA00000055EE",
+			"0025CA00000055EE",
+			"2B7E151628AED2A6ABF7158809CF4F3C"
+	);
   /* USER CODE END 2 */
 
   /* Infinite loop */
@@ -285,29 +300,23 @@ int main(void)
 		  lorawan_state = ENTER_SLEEP_MODE;
 		  break;
 	  case ENTER_SLEEP_MODE:
-		  // For now, let's test without actual sleep mode to isolate the issue
-		  
-		  // Use a simple delay instead of sleep mode for testing
-		  HAL_Delay(5000);
-		  
-		  // Comment out the sleep code for now
-		  /*
+		  ATC_SendReceive(&lora, "ATI 42\r\n", 200, &CONNECTION_STATUS, 2000, 5, "0", "1", "2", "3", "OK");
+		  ATC_SendReceive(&lora, "AT+SLEEP\r\n", 200, &CONNECTION_STATUS, 2000, 1, "OK");
+		  ATC_SendReceive(&lora, "AT+SLEEP\r\n", 200, &CONNECTION_STATUS, 2000, 1, "OK");
 		  HAL_SuspendTick();
-		  
-		  HAL_StatusTypeDef timer_status = HAL_RTCEx_SetWakeUpTimer_IT(&hrtc, 5, RTC_WAKEUPCLOCK_RTCCLK_DIV16);
-		  if (timer_status != HAL_OK) {
-			  HAL_ResumeTick();
-			  lorawan_state = DEVICE_SLEEP;
-			  break;
+		  if (sleep_cycles == 0) {
+			  sleep_cycles = 8; // 8 x 16s = ~128s
 		  }
-	      
-	      HAL_PWR_EnterSTOPMode(PWR_LOWPOWERREGULATOR_ON, PWR_STOPENTRY_WFI);
-	      
+		  sleep_wakeup_flag = 0;
+		  HAL_RTCEx_SetWakeUpTimer_IT(&hrtc, 10000, RTC_WAKEUPCLOCK_RTCCLK_DIV16);
+		  while (sleep_cycles > 0) {
+			  sleep_wakeup_flag = 0;
+			  HAL_PWR_EnterSTOPMode(PWR_LOWPOWERREGULATOR_ON, PWR_STOPENTRY_WFI);
+			  SystemClock_Config();
+			  while (!sleep_wakeup_flag) { __WFI(); }
+		  }
 		  HAL_RTCEx_DeactivateWakeUpTimer(&hrtc);
-		  SystemClock_Config();
 		  HAL_ResumeTick();
-		  */
-		  
 		  lorawan_state = DEVICE_SLEEP;
 		  break;
 	  case DEVICE_SLEEP:
@@ -319,7 +328,7 @@ int main(void)
 		  if (has_sensor_1 || has_sensor_2) {
 			  sensor_init_and_read();
 		  }
-		  lorawan_state = LORAWAN_JOINED; // Go back to send data
+		  lorawan_state = LORAWAN_JOINED;
 		  break;
 	  }
   }
