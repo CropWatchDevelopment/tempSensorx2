@@ -165,8 +165,12 @@ void HAL_UARTEx_RxEventCallback(UART_HandleTypeDef *huart, uint16_t Size)
  */
 void HAL_RTCEx_WakeUpTimerEventCallback(RTC_HandleTypeDef *hrtc)
 {
-	// The main loop will handle the state transition
-	lorawan_state = DEVICE_SLEEP; // CHANGED: Ensure state transition on wake-up
+    // Clean up the wake-up timer
+    HAL_RTCEx_DeactivateWakeUpTimer(hrtc);
+    __HAL_RTC_WAKEUPTIMER_CLEAR_FLAG(hrtc, RTC_FLAG_WUTF);
+    
+    // Set the next state
+    lorawan_state = DEVICE_SLEEP;
 }
 /* USER CODE END 0 */
 
@@ -205,6 +209,13 @@ int main(void)
   MX_RTC_Init();
   /* USER CODE BEGIN 2 */
 
+  // Configure EXTI Line 20 for RTC wake-up timer
+  __HAL_RCC_PWR_CLK_ENABLE();
+
+  // Configure EXTI Line20 (RTC Wake-up Timer)
+  __HAL_RTC_WAKEUPTIMER_EXTI_ENABLE_IT();
+  __HAL_RTC_WAKEUPTIMER_EXTI_ENABLE_RISING_EDGE();
+
   // Initialize ATC LoRa handle
   lora.hUart = &hlpuart1;
   lora.psEvents = (ATC_EventTypeDef*)events;
@@ -219,7 +230,10 @@ int main(void)
   for(int i = 0; i < 16; i++) {  // ATC_RESP_MAX is typically 16
     lora.ppResp[i] = NULL;
   }
-
+  char* CONNECTION_STATUS = NULL;
+//  ATC_SendReceive(&lora, "ATS 213=1000\r\n", 200, &CONNECTION_STATUS, 2000, 1, "OK");
+//  ATC_SendReceive(&lora, "AT&W", 200, &CONNECTION_STATUS, 2000, 1, "OK");
+  HAL_Delay(10000);
   /* USER CODE END 2 */
 
   /* Infinite loop */
@@ -233,6 +247,7 @@ int main(void)
 	  switch (lorawan_state) {
 	  case LORAWAN_NOT_JOINED:
 		{
+			ATC_SendReceive(&lora, "AT\r\n", 200, &CONNECTION_STATUS, 2000, 1, "OK");
 			LoRaWAN_Error_t join_result = join_network(&lora);
 			if (join_result == LORAWAN_OK) {
 				lorawan_state = LORAWAN_JOINING;
@@ -248,7 +263,7 @@ int main(void)
 		  // Ready to send data
 		  last_tx_status = TX_STATUS_UNKNOWN; // Reset status before sending
 
-		  char* CONNECTION_STATUS = NULL;
+		  ATC_SendReceive(&lora, "AT\r\n", 200, &CONNECTION_STATUS, 2000, 1, "OK");
 		  resp = ATC_SendReceive(&lora, "ATI 3001\r\n", 200, &CONNECTION_STATUS, 2000, 2, "0\r", "1");
 		  if (CONNECTION_STATUS == 0)
 		  {
@@ -286,33 +301,49 @@ int main(void)
 		  lorawan_state = ENTER_SLEEP_MODE;
 		  break;
 	  case ENTER_SLEEP_MODE:
-		  // For now, let's test without actual sleep mode to isolate the issue
-		  
-		  // Use a simple delay instead of sleep mode for testing
+		  // Put LoRa module to sleep first
+		  resp = ATC_SendReceive(&lora, "AT+SLEEP\r\n", 200, &CONNECTION_STATUS, 2000, 2, "0\r", "1");
 		  HAL_Delay(5000);
 		  
-		// CHANGED: Replaced HAL_Delay with RTC-based STOP mode
-		HAL_SuspendTick(); // Suspend SysTick to prevent interrupts in STOP mode
-
-		// Configure RTC wake-up timer for 5 seconds
-		// LSI = 37 kHz, with RTC_WAKEUPCLOCK_RTCCLK_DIV16 = 37k/16 ≈ 2312.5 Hz
-		// For 5 seconds: WakeUpCounter = 2312.5 * 5 - 1 ≈ 11561
-		HAL_StatusTypeDef timer_status = HAL_RTCEx_SetWakeUpTimer_IT(&hrtc, 11561, RTC_WAKEUPCLOCK_RTCCLK_DIV16);
-		if (timer_status != HAL_OK) {
-		  HAL_ResumeTick(); // Resume SysTick if RTC setup fails
-		  Error_Handler();  // Handle RTC configuration error
-		}
-
-		// Enter STOP mode
-		HAL_PWR_EnterSTOPMode(PWR_LOWPOWERREGULATOR_ON, PWR_STOPENTRY_WFI);
-
-		// After wake-up, disable wake-up timer and restore system
-		HAL_RTCEx_DeactivateWakeUpTimer(&hrtc);
-		SystemClock_Config(); // Reconfigure system clock
-		HAL_ResumeTick(); // Resume SysTick
-
-		lorawan_state = DEVICE_SLEEP; // Transition to DEVICE_SLEEP
-		break;
+		  // Simple approach - deactivate any existing timer
+		  HAL_RTCEx_DeactivateWakeUpTimer(&hrtc);
+		  HAL_Delay(10);
+		  
+		  // Clear any pending wake-up timer flags
+		  __HAL_RTC_WAKEUPTIMER_CLEAR_FLAG(&hrtc, RTC_FLAG_WUTF);
+		  
+		  // Set up the wake-up timer for 5 seconds
+		  if (HAL_RTCEx_SetWakeUpTimer_IT(&hrtc, 11561, RTC_WAKEUPCLOCK_RTCCLK_DIV16) != HAL_OK) {
+		      // If HAL function fails, try direct register access
+		      __HAL_RTC_WRITEPROTECTION_DISABLE(&hrtc);
+		      
+		      // Ensure timer is disabled first
+		      hrtc.Instance->CR &= ~RTC_CR_WUTE;
+		      while((__HAL_RTC_WAKEUPTIMER_GET_FLAG(&hrtc, RTC_FLAG_WUTWF)) == 0);
+		      
+		      // Set timer value and configuration
+		      hrtc.Instance->WUTR = 11561;
+		      hrtc.Instance->CR &= ~RTC_CR_WUCKSEL;
+		      hrtc.Instance->CR |= RTC_WAKEUPCLOCK_RTCCLK_DIV16;
+		      
+		      // Enable interrupt and timer
+		      __HAL_RTC_WAKEUPTIMER_ENABLE_IT(&hrtc, RTC_IT_WUT);
+		      hrtc.Instance->CR |= RTC_CR_WUTE;
+		      
+		      __HAL_RTC_WRITEPROTECTION_ENABLE(&hrtc);
+		  }
+		  
+		  // Suspend SysTick and enter STOP mode
+		  HAL_SuspendTick();
+		  HAL_PWR_EnterSTOPMode(PWR_LOWPOWERREGULATOR_ON, PWR_STOPENTRY_WFI);
+		  
+		  // After wake-up, restore system clock first
+		  SystemClock_Config();
+		  HAL_ResumeTick();
+		  
+		  // Don't immediately clean up the timer - let the interrupt handler do it
+		  // The wake-up callback will set the state
+		  break;
 
 	  case DEVICE_SLEEP:
 		  lorawan_state = COLLECT_DATA;
@@ -336,50 +367,50 @@ int main(void)
   */
 void SystemClock_Config(void)
 {
-	RCC_OscInitTypeDef RCC_OscInitStruct = {0};
-	    RCC_ClkInitTypeDef RCC_ClkInitStruct = {0};
-	    RCC_PeriphCLKInitTypeDef PeriphClkInit = {0};
+  RCC_OscInitTypeDef RCC_OscInitStruct = {0};
+  RCC_ClkInitTypeDef RCC_ClkInitStruct = {0};
+  RCC_PeriphCLKInitTypeDef PeriphClkInit = {0};
 
-	    /** Configure the main internal regulator output voltage
-	    */
-	    __HAL_PWR_VOLTAGESCALING_CONFIG(PWR_REGULATOR_VOLTAGE_SCALE1);
+  /** Configure the main internal regulator output voltage
+  */
+  __HAL_PWR_VOLTAGESCALING_CONFIG(PWR_REGULATOR_VOLTAGE_SCALE1);
 
-	    /** Initializes the RCC Oscillators according to the specified parameters
-	    * in the RCC_OscInitTypeDef structure.
-	    */
-	    RCC_OscInitStruct.OscillatorType = RCC_OSCILLATORTYPE_LSI|RCC_OSCILLATORTYPE_MSI;
-	    RCC_OscInitStruct.LSIState = RCC_LSI_ON;
-	    RCC_OscInitStruct.MSIState = RCC_MSI_ON;
-	    RCC_OscInitStruct.MSICalibrationValue = 0;
-	    RCC_OscInitStruct.MSIClockRange = RCC_MSIRANGE_5;
-	    RCC_OscInitStruct.PLL.PLLState = RCC_PLL_NONE;
-	    if (HAL_RCC_OscConfig(&RCC_OscInitStruct) != HAL_OK)
-	    {
-	        Error_Handler();
-	    }
+  /** Initializes the RCC Oscillators according to the specified parameters
+  * in the RCC_OscInitTypeDef structure.
+  */
+  RCC_OscInitStruct.OscillatorType = RCC_OSCILLATORTYPE_LSI|RCC_OSCILLATORTYPE_MSI;
+  RCC_OscInitStruct.LSIState = RCC_LSI_ON;
+  RCC_OscInitStruct.MSIState = RCC_MSI_ON;
+  RCC_OscInitStruct.MSICalibrationValue = 0;
+  RCC_OscInitStruct.MSIClockRange = RCC_MSIRANGE_5;
+  RCC_OscInitStruct.PLL.PLLState = RCC_PLL_NONE;
+  if (HAL_RCC_OscConfig(&RCC_OscInitStruct) != HAL_OK)
+  {
+    Error_Handler();
+  }
 
-	    /** Initializes the CPU, AHB and APB buses clocks
-	    */
-	    RCC_ClkInitStruct.ClockType = RCC_CLOCKTYPE_HCLK|RCC_CLOCKTYPE_SYSCLK
-	                                |RCC_CLOCKTYPE_PCLK1|RCC_CLOCKTYPE_PCLK2;
-	    RCC_ClkInitStruct.SYSCLKSource = RCC_SYSCLKSOURCE_MSI;
-	    RCC_ClkInitStruct.AHBCLKDivider = RCC_SYSCLK_DIV1;
-	    RCC_ClkInitStruct.APB1CLKDivider = RCC_HCLK_DIV1;
-	    RCC_ClkInitStruct.APB2CLKDivider = RCC_HCLK_DIV1;
+  /** Initializes the CPU, AHB and APB buses clocks
+  */
+  RCC_ClkInitStruct.ClockType = RCC_CLOCKTYPE_HCLK|RCC_CLOCKTYPE_SYSCLK
+                              |RCC_CLOCKTYPE_PCLK1|RCC_CLOCKTYPE_PCLK2;
+  RCC_ClkInitStruct.SYSCLKSource = RCC_SYSCLKSOURCE_MSI;
+  RCC_ClkInitStruct.AHBCLKDivider = RCC_SYSCLK_DIV1;
+  RCC_ClkInitStruct.APB1CLKDivider = RCC_HCLK_DIV1;
+  RCC_ClkInitStruct.APB2CLKDivider = RCC_HCLK_DIV1;
 
-	    if (HAL_RCC_ClockConfig(&RCC_ClkInitStruct, FLASH_LATENCY_0) != HAL_OK)
-	    {
-	        Error_Handler();
-	    }
-	    PeriphClkInit.PeriphClockSelection = RCC_PERIPHCLK_LPUART1|RCC_PERIPHCLK_I2C1
-	                                |RCC_PERIPHCLK_RTC;
-	    PeriphClkInit.Lpuart1ClockSelection = RCC_LPUART1CLKSOURCE_PCLK1;
-	    PeriphClkInit.I2c1ClockSelection = RCC_I2C1CLKSOURCE_PCLK1;
-	    PeriphClkInit.RTCClockSelection = RCC_RTCCLKSOURCE_LSI;
-	    if (HAL_RCCEx_PeriphCLKConfig(&PeriphClkInit) != HAL_OK)
-	    {
-	        Error_Handler();
-	    }
+  if (HAL_RCC_ClockConfig(&RCC_ClkInitStruct, FLASH_LATENCY_0) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  PeriphClkInit.PeriphClockSelection = RCC_PERIPHCLK_LPUART1|RCC_PERIPHCLK_I2C1
+                              |RCC_PERIPHCLK_RTC;
+  PeriphClkInit.Lpuart1ClockSelection = RCC_LPUART1CLKSOURCE_PCLK1;
+  PeriphClkInit.I2c1ClockSelection = RCC_I2C1CLKSOURCE_PCLK1;
+  PeriphClkInit.RTCClockSelection = RCC_RTCCLKSOURCE_LSI;
+  if (HAL_RCCEx_PeriphCLKConfig(&PeriphClkInit) != HAL_OK)
+  {
+    Error_Handler();
+  }
 }
 
 /* USER CODE BEGIN 4 */
@@ -395,6 +426,7 @@ void Error_Handler(void)
   /* USER CODE BEGIN Error_Handler_Debug */
   /* User can add his own implementation to report the HAL error return state */
   __disable_irq();
+  HAL_GPIO_WritePin(I2C_ENABLE_GPIO_Port, I2C_ENABLE_Pin, GPIO_PIN_SET);
   while (1)
   {
   }

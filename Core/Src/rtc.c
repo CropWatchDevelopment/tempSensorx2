@@ -34,8 +34,6 @@ void MX_RTC_Init(void)
 
   /* USER CODE END RTC_Init 0 */
 
-  RTC_TamperTypeDef sTamper = {0};
-
   /* USER CODE BEGIN RTC_Init 1 */
 
   /* USER CODE END RTC_Init 1 */
@@ -61,9 +59,6 @@ void MX_RTC_Init(void)
   {
     Error_Handler();
   }
-
-  /** Enable the RTC Tamper 1
-  */
   /* USER CODE BEGIN RTC_Init 2 */
 
   /* USER CODE END RTC_Init 2 */
