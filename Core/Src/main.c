@@ -53,7 +53,7 @@
 
 /* Private typedef -----------------------------------------------------------*/
 /* USER CODE BEGIN PTD */
-
+#define RTC_WAKEUP_PERIOD_SECONDS 5  // Sleep for 5 seconds // CHANGED: Added for RTC wake-up period
 /* USER CODE END PTD */
 
 /* Private define ------------------------------------------------------------*/
@@ -166,6 +166,7 @@ void HAL_UARTEx_RxEventCallback(UART_HandleTypeDef *huart, uint16_t Size)
 void HAL_RTCEx_WakeUpTimerEventCallback(RTC_HandleTypeDef *hrtc)
 {
 	// The main loop will handle the state transition
+	lorawan_state = DEVICE_SLEEP; // CHANGED: Ensure state transition on wake-up
 }
 /* USER CODE END 0 */
 
@@ -290,26 +291,29 @@ int main(void)
 		  // Use a simple delay instead of sleep mode for testing
 		  HAL_Delay(5000);
 		  
-		  // Comment out the sleep code for now
-		  /*
-		  HAL_SuspendTick();
-		  
-		  HAL_StatusTypeDef timer_status = HAL_RTCEx_SetWakeUpTimer_IT(&hrtc, 5, RTC_WAKEUPCLOCK_RTCCLK_DIV16);
-		  if (timer_status != HAL_OK) {
-			  HAL_ResumeTick();
-			  lorawan_state = DEVICE_SLEEP;
-			  break;
-		  }
-	      
-	      HAL_PWR_EnterSTOPMode(PWR_LOWPOWERREGULATOR_ON, PWR_STOPENTRY_WFI);
-	      
-		  HAL_RTCEx_DeactivateWakeUpTimer(&hrtc);
-		  SystemClock_Config();
-		  HAL_ResumeTick();
-		  */
-		  
-		  lorawan_state = DEVICE_SLEEP;
-		  break;
+		// CHANGED: Replaced HAL_Delay with RTC-based STOP mode
+		HAL_SuspendTick(); // Suspend SysTick to prevent interrupts in STOP mode
+
+		// Configure RTC wake-up timer for 5 seconds
+		// LSI = 37 kHz, with RTC_WAKEUPCLOCK_RTCCLK_DIV16 = 37k/16 ≈ 2312.5 Hz
+		// For 5 seconds: WakeUpCounter = 2312.5 * 5 - 1 ≈ 11561
+		HAL_StatusTypeDef timer_status = HAL_RTCEx_SetWakeUpTimer_IT(&hrtc, 11561, RTC_WAKEUPCLOCK_RTCCLK_DIV16);
+		if (timer_status != HAL_OK) {
+		  HAL_ResumeTick(); // Resume SysTick if RTC setup fails
+		  Error_Handler();  // Handle RTC configuration error
+		}
+
+		// Enter STOP mode
+		HAL_PWR_EnterSTOPMode(PWR_LOWPOWERREGULATOR_ON, PWR_STOPENTRY_WFI);
+
+		// After wake-up, disable wake-up timer and restore system
+		HAL_RTCEx_DeactivateWakeUpTimer(&hrtc);
+		SystemClock_Config(); // Reconfigure system clock
+		HAL_ResumeTick(); // Resume SysTick
+
+		lorawan_state = DEVICE_SLEEP; // Transition to DEVICE_SLEEP
+		break;
+
 	  case DEVICE_SLEEP:
 		  lorawan_state = COLLECT_DATA;
 	  break;
@@ -332,50 +336,50 @@ int main(void)
   */
 void SystemClock_Config(void)
 {
-  RCC_OscInitTypeDef RCC_OscInitStruct = {0};
-  RCC_ClkInitTypeDef RCC_ClkInitStruct = {0};
-  RCC_PeriphCLKInitTypeDef PeriphClkInit = {0};
+	RCC_OscInitTypeDef RCC_OscInitStruct = {0};
+	    RCC_ClkInitTypeDef RCC_ClkInitStruct = {0};
+	    RCC_PeriphCLKInitTypeDef PeriphClkInit = {0};
 
-  /** Configure the main internal regulator output voltage
-  */
-  __HAL_PWR_VOLTAGESCALING_CONFIG(PWR_REGULATOR_VOLTAGE_SCALE1);
+	    /** Configure the main internal regulator output voltage
+	    */
+	    __HAL_PWR_VOLTAGESCALING_CONFIG(PWR_REGULATOR_VOLTAGE_SCALE1);
 
-  /** Initializes the RCC Oscillators according to the specified parameters
-  * in the RCC_OscInitTypeDef structure.
-  */
-  RCC_OscInitStruct.OscillatorType = RCC_OSCILLATORTYPE_LSI|RCC_OSCILLATORTYPE_MSI;
-  RCC_OscInitStruct.LSIState = RCC_LSI_ON;
-  RCC_OscInitStruct.MSIState = RCC_MSI_ON;
-  RCC_OscInitStruct.MSICalibrationValue = 0;
-  RCC_OscInitStruct.MSIClockRange = RCC_MSIRANGE_5;
-  RCC_OscInitStruct.PLL.PLLState = RCC_PLL_NONE;
-  if (HAL_RCC_OscConfig(&RCC_OscInitStruct) != HAL_OK)
-  {
-    Error_Handler();
-  }
+	    /** Initializes the RCC Oscillators according to the specified parameters
+	    * in the RCC_OscInitTypeDef structure.
+	    */
+	    RCC_OscInitStruct.OscillatorType = RCC_OSCILLATORTYPE_LSI|RCC_OSCILLATORTYPE_MSI;
+	    RCC_OscInitStruct.LSIState = RCC_LSI_ON;
+	    RCC_OscInitStruct.MSIState = RCC_MSI_ON;
+	    RCC_OscInitStruct.MSICalibrationValue = 0;
+	    RCC_OscInitStruct.MSIClockRange = RCC_MSIRANGE_5;
+	    RCC_OscInitStruct.PLL.PLLState = RCC_PLL_NONE;
+	    if (HAL_RCC_OscConfig(&RCC_OscInitStruct) != HAL_OK)
+	    {
+	        Error_Handler();
+	    }
 
-  /** Initializes the CPU, AHB and APB buses clocks
-  */
-  RCC_ClkInitStruct.ClockType = RCC_CLOCKTYPE_HCLK|RCC_CLOCKTYPE_SYSCLK
-                              |RCC_CLOCKTYPE_PCLK1|RCC_CLOCKTYPE_PCLK2;
-  RCC_ClkInitStruct.SYSCLKSource = RCC_SYSCLKSOURCE_MSI;
-  RCC_ClkInitStruct.AHBCLKDivider = RCC_SYSCLK_DIV1;
-  RCC_ClkInitStruct.APB1CLKDivider = RCC_HCLK_DIV1;
-  RCC_ClkInitStruct.APB2CLKDivider = RCC_HCLK_DIV1;
+	    /** Initializes the CPU, AHB and APB buses clocks
+	    */
+	    RCC_ClkInitStruct.ClockType = RCC_CLOCKTYPE_HCLK|RCC_CLOCKTYPE_SYSCLK
+	                                |RCC_CLOCKTYPE_PCLK1|RCC_CLOCKTYPE_PCLK2;
+	    RCC_ClkInitStruct.SYSCLKSource = RCC_SYSCLKSOURCE_MSI;
+	    RCC_ClkInitStruct.AHBCLKDivider = RCC_SYSCLK_DIV1;
+	    RCC_ClkInitStruct.APB1CLKDivider = RCC_HCLK_DIV1;
+	    RCC_ClkInitStruct.APB2CLKDivider = RCC_HCLK_DIV1;
 
-  if (HAL_RCC_ClockConfig(&RCC_ClkInitStruct, FLASH_LATENCY_0) != HAL_OK)
-  {
-    Error_Handler();
-  }
-  PeriphClkInit.PeriphClockSelection = RCC_PERIPHCLK_LPUART1|RCC_PERIPHCLK_I2C1
-                              |RCC_PERIPHCLK_RTC;
-  PeriphClkInit.Lpuart1ClockSelection = RCC_LPUART1CLKSOURCE_PCLK1;
-  PeriphClkInit.I2c1ClockSelection = RCC_I2C1CLKSOURCE_PCLK1;
-  PeriphClkInit.RTCClockSelection = RCC_RTCCLKSOURCE_LSI;
-  if (HAL_RCCEx_PeriphCLKConfig(&PeriphClkInit) != HAL_OK)
-  {
-    Error_Handler();
-  }
+	    if (HAL_RCC_ClockConfig(&RCC_ClkInitStruct, FLASH_LATENCY_0) != HAL_OK)
+	    {
+	        Error_Handler();
+	    }
+	    PeriphClkInit.PeriphClockSelection = RCC_PERIPHCLK_LPUART1|RCC_PERIPHCLK_I2C1
+	                                |RCC_PERIPHCLK_RTC;
+	    PeriphClkInit.Lpuart1ClockSelection = RCC_LPUART1CLKSOURCE_PCLK1;
+	    PeriphClkInit.I2c1ClockSelection = RCC_I2C1CLKSOURCE_PCLK1;
+	    PeriphClkInit.RTCClockSelection = RCC_RTCCLKSOURCE_LSI;
+	    if (HAL_RCCEx_PeriphCLKConfig(&PeriphClkInit) != HAL_OK)
+	    {
+	        Error_Handler();
+	    }
 }
 
 /* USER CODE BEGIN 4 */

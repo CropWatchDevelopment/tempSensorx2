@@ -64,20 +64,6 @@ void MX_RTC_Init(void)
 
   /** Enable the RTC Tamper 1
   */
-  sTamper.Tamper = RTC_TAMPER_1;
-  sTamper.Interrupt = RTC_TAMPER1_INTERRUPT;
-  sTamper.Trigger = RTC_TAMPERTRIGGER_RISINGEDGE;
-  sTamper.NoErase = RTC_TAMPER_ERASE_BACKUP_ENABLE;
-  sTamper.MaskFlag = RTC_TAMPERMASK_FLAG_DISABLE;
-  sTamper.Filter = RTC_TAMPERFILTER_DISABLE;
-  sTamper.SamplingFrequency = RTC_TAMPERSAMPLINGFREQ_RTCCLK_DIV32768;
-  sTamper.PrechargeDuration = RTC_TAMPERPRECHARGEDURATION_1RTCCLK;
-  sTamper.TamperPullUp = RTC_TAMPER_PULLUP_ENABLE;
-  sTamper.TimeStampOnTamperDetection = RTC_TIMESTAMPONTAMPERDETECTION_ENABLE;
-  if (HAL_RTCEx_SetTamper_IT(&hrtc, &sTamper) != HAL_OK)
-  {
-    Error_Handler();
-  }
   /* USER CODE BEGIN RTC_Init 2 */
 
   /* USER CODE END RTC_Init 2 */
