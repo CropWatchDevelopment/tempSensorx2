@@ -33,7 +33,6 @@ ATC_HandleTypeDef lora;
 bool joined = false;
 
 typedef enum {
-	DEVICE_WAKE,
 	DEVICE_SLEEP,
 	DEVICE_COLLECT_DATA,
 	LORAWAN_JOIN,
@@ -42,8 +41,8 @@ volatile Device_State_t device_state = LORAWAN_JOIN;
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
-void SystemClock_Config(void);
 /* USER CODE BEGIN PFP */
+void SystemClock_Config(void);
 void enter_low_power_mode(void);
 void exit_low_power_mode(void);
 /* USER CODE END PFP */
@@ -97,6 +96,7 @@ void HAL_RTCEx_WakeUpTimerEventCallback(RTC_HandleTypeDef *hrtc)
   /* Clear wake-up flag */
   __HAL_RTC_WAKEUPTIMER_CLEAR_FLAG(hrtc, RTC_FLAG_WUTF);
   device_state = DEVICE_COLLECT_DATA;
+  exit_low_power_mode();
 }
 
 
@@ -128,8 +128,8 @@ void cb_JOIN(const char* str)
 
 const ATC_EventTypeDef events[] = {
 	/* MODULE STATUS CALLBACKS */
-    { "WAKE",            cb_WAKE                },
-	{ "OK",              cb_OK                  },
+    { "WAKE",            cb_WAKE                }, // i will remove this too
+	{ "OK",              cb_OK                  }, // I will remove this later as it is not imporant to know this
 	{ "JOIN: [",         cb_JOIN                },
 	{ NULL,              NULL                   }  // CRITICAL: Add this terminator!
 };
@@ -178,12 +178,14 @@ void exit_low_power_mode(void)
     
     // Reinitialize GPIOs (this will restore PB5 to its normal configuration)
     MX_GPIO_Init();
-    MX_DMA_Init();
+    MX_DMA_Init();                              // I did this because it is in the same order as it was generated
+    MX_I2C1_Init();
     MX_LPUART1_UART_Init();
-    ATC_Init(&lora, &hlpuart1, 512, "LoRaWAN"); // Adjust buffer size as needed
-    ATC_SetEvents(&lora, events);
+    MX_RTC_Init();
+    ATC_Init(&lora, &hlpuart1, 512, "LoRaWAN"); // this SHOULD make the ATC serial commands workagain
+    ATC_SetEvents(&lora, events);               // Setup all async events again
     device_state = DEVICE_COLLECT_DATA;
-    HAL_GPIO_WritePin(I2C_ENABLE_GPIO_Port, I2C_ENABLE_Pin, GPIO_PIN_RESET);
+    HAL_GPIO_WritePin(I2C_ENABLE_GPIO_Port, I2C_ENABLE_Pin, GPIO_PIN_SET);
 }
 
 /* USER CODE END 0 */
@@ -222,12 +224,13 @@ int main(void)
   // Initialize the ATC handle before using it
   ATC_Init(&lora, &hlpuart1, 512, "LoRaWAN"); // Adjust buffer size as needed
   ATC_SetEvents(&lora, events);
-  HAL_Delay(10000);
+
+
+  HAL_Delay(10000); // This makes it easier to debug, don't remove
   /* USER CODE END 2 */
 
   /* Infinite loop */
   /* USER CODE BEGIN WHILE */
-  int resp = 0;
   char* ATSEND_Result = NULL;
   uint32_t last_command_time = 0;
 
@@ -240,8 +243,9 @@ int main(void)
       case LORAWAN_JOIN:
           if (HAL_GetTick() - last_command_time > 10000 && !joined)
           {
-        	  resp = ATC_SendReceive(&lora, "AT\r\n", 1000, &ATSEND_Result, 3000, 1, "OK");
-              resp = ATC_SendReceive(&lora, "AT+JOIN\r\n", 1000, &ATSEND_Result, 3000, 1, "OK");
+        	  // this always works
+        	  ATC_SendReceive(&lora, "AT\r\n", 1000, &ATSEND_Result, 3000, 1, "OK"); // This wakes the LoRa Module, it can be anything, so AT is best
+              ATC_SendReceive(&lora, "AT+JOIN\r\n", 1000, &ATSEND_Result, 3000, 1, "OK");
               last_command_time = HAL_GetTick();
           }
 	  break;
@@ -249,9 +253,8 @@ int main(void)
 		  enter_low_power_mode();
 	  break;
 	  case DEVICE_COLLECT_DATA:
-
+		  // what sucks is when the device sleeps, I loose debugger session, so i can't get a break point here after sleep!
 		  ATC_SendReceive(&lora, "AT\r\n", 1000, &ATSEND_Result, 3000, 1, "OK");
-		  HAL_Delay(10);
 		  ATC_SendReceive(&lora, "AT+SEND \"AA\"\r\n", 1000, &ATSEND_Result, 3000, 1, "OK");
 		  device_state = DEVICE_SLEEP;
 	  break;
