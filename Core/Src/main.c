@@ -97,12 +97,45 @@ void HAL_RTCEx_WakeUpTimerEventCallback(RTC_HandleTypeDef *hrtc)
   /* Clear wake-up flag */
   __HAL_RTC_WAKEUPTIMER_CLEAR_FLAG(hrtc, RTC_FLAG_WUTF);
   device_state = DEVICE_COLLECT_DATA;
-  HAL_GPIO_WritePin(DBG_LED_GPIO_Port, DBG_LED_Pin, GPIO_PIN_SET);
 }
 
 
 /* Private user code ---------------------------------------------------------*/
 /* USER CODE BEGIN 0 */
+void cb_WAKE(const char* str)
+{
+  __NOP();
+}
+void cb_OK(const char* str)
+{
+  __NOP();
+}
+void cb_JOIN(const char* str)
+{
+	switch (str[7]) {
+		case 'O':
+			joined = true;
+			device_state = DEVICE_COLLECT_DATA;
+			break;
+		case 'F':
+			joined = false;
+			break;
+		default:
+			__NOP();
+	}
+	HAL_Delay(500);
+}
+
+const ATC_EventTypeDef events[] = {
+	/* MODULE STATUS CALLBACKS */
+    { "WAKE",            cb_WAKE                },
+	{ "OK",              cb_OK                  },
+	{ "JOIN: [",         cb_JOIN                },
+	{ NULL,              NULL                   }  // CRITICAL: Add this terminator!
+};
+
+
+
 void enter_low_power_mode(void)
 {
 
@@ -145,43 +178,14 @@ void exit_low_power_mode(void)
     
     // Reinitialize GPIOs (this will restore PB5 to its normal configuration)
     MX_GPIO_Init();
-    MX_LPUART1_UART_Init();
     MX_DMA_Init();
+    MX_LPUART1_UART_Init();
+    ATC_Init(&lora, &hlpuart1, 512, "LoRaWAN"); // Adjust buffer size as needed
+    ATC_SetEvents(&lora, events);
     device_state = DEVICE_COLLECT_DATA;
+    HAL_GPIO_WritePin(I2C_ENABLE_GPIO_Port, I2C_ENABLE_Pin, GPIO_PIN_RESET);
 }
 
-
-void cb_WAKE(const char* str)
-{
-  __NOP();
-}
-void cb_OK(const char* str)
-{
-  __NOP();
-}
-void cb_JOIN(const char* str)
-{
-	switch (str[7]) {
-		case 'O':
-			joined = true;
-			device_state = DEVICE_COLLECT_DATA;
-			break;
-		case 'F':
-			joined = false;
-			break;
-		default:
-			__NOP();
-	}
-	HAL_Delay(500);
-}
-
-const ATC_EventTypeDef events[] = {
-	/* MODULE STATUS CALLBACKS */
-    { "WAKE",            cb_WAKE                },
-	{ "OK",              cb_OK                  },
-	{ "JOIN: [",         cb_JOIN                },
-	{ NULL,              NULL                   }  // CRITICAL: Add this terminator!
-};
 /* USER CODE END 0 */
 
 /**
@@ -245,10 +249,11 @@ int main(void)
 		  enter_low_power_mode();
 	  break;
 	  case DEVICE_COLLECT_DATA:
-		ATC_SendReceive(&lora, "AT\r\n", 1000, &ATSEND_Result, 3000, 1, "OK");
-		HAL_Delay(10);
-		ATC_SendReceive(&lora, "AT+SEND \"AA\"\r\n", 1000, &ATSEND_Result, 3000, 1, "OK");
-		device_state = DEVICE_SLEEP;
+
+		  ATC_SendReceive(&lora, "AT\r\n", 1000, &ATSEND_Result, 3000, 1, "OK");
+		  HAL_Delay(10);
+		  ATC_SendReceive(&lora, "AT+SEND \"AA\"\r\n", 1000, &ATSEND_Result, 3000, 1, "OK");
+		  device_state = DEVICE_SLEEP;
 	  break;
       }
   }
