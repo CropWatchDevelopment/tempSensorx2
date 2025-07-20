@@ -75,37 +75,40 @@ void HARDWARE_PWR_SleepOptimisation( void )
 	GPIO_InitStruct.Speed 			= GPIO_SPEED_FREQ_LOW;
 	HAL_GPIO_Init(GPIOB, &GPIO_InitStruct);
 
-	GPIO_InitStruct.Pin 			= GPIO_PIN_2 |GPIO_PIN_3 | GPIO_PIN_4  | GPIO_PIN_6 | GPIO_PIN_7  | GPIO_PIN_8 | GPIO_PIN_9 | GPIO_PIN_10 | GPIO_PIN_11 | GPIO_PIN_12  | GPIO_PIN_13 | GPIO_PIN_14 | GPIO_PIN_15;
-	GPIO_InitStruct.Mode 			= GPIO_MODE_ANALOG;
-	GPIO_InitStruct.Pull 			= GPIO_NOPULL;
-	GPIO_InitStruct.Speed 			= GPIO_SPEED_FREQ_LOW;
-	HAL_GPIO_Init(GPIOB, &GPIO_InitStruct);
-
 	GPIO_InitStruct.Pin 			= GPIO_PIN_0 | GPIO_PIN_1 |  GPIO_PIN_2 |GPIO_PIN_3 | GPIO_PIN_4  | GPIO_PIN_5  |  GPIO_PIN_6 | GPIO_PIN_7  | GPIO_PIN_8 | GPIO_PIN_9 | GPIO_PIN_10 | GPIO_PIN_11 | GPIO_PIN_12  | GPIO_PIN_13 | GPIO_PIN_14 | GPIO_PIN_15;
 	GPIO_InitStruct.Mode 			= GPIO_MODE_ANALOG;
 	GPIO_InitStruct.Pull 			= GPIO_NOPULL;
 	GPIO_InitStruct.Speed 			= GPIO_SPEED_FREQ_LOW;
-	HAL_GPIO_Init(GPIOB, &GPIO_InitStruct);
+	HAL_GPIO_Init(GPIOC, &GPIO_InitStruct);
 
 }
 
-
+/* Add RTC wake-up interrupt handler */
+void HAL_RTCEx_WakeUpTimerEventCallback(RTC_HandleTypeDef *hrtc)
+{
+  /* Clear wake-up flag */
+  __HAL_RTC_WAKEUPTIMER_CLEAR_FLAG(hrtc, RTC_FLAG_WUTF);
+}
 
 
 /* Private user code ---------------------------------------------------------*/
 /* USER CODE BEGIN 0 */
 void enter_low_power_mode(void)
 {
-
-
 	HARDWARE_PWR_SleepOptimisation();
 
-    // Enter Stop Mode with low power regulator
-    HAL_PWR_EnterSTOPMode(PWR_LOWPOWERREGULATOR_ON, PWR_STOPENTRY_WFI);
-    
-    // When we wake up, execution continues here
-    SystemClock_Config();
-    exit_low_power_mode();
+	/* Configure RTC wake-up timer for 60 seconds */
+	if (HAL_RTCEx_SetWakeUpTimer_IT(&hrtc, 59, RTC_WAKEUPCLOCK_CK_SPRE_16BITS) != HAL_OK)
+	{
+	Error_Handler();
+	}
+
+	// Enter Stop Mode with low power regulator
+	HAL_PWR_EnterSTOPMode(PWR_LOWPOWERREGULATOR_ON, PWR_STOPENTRY_WFI);
+
+	// When we wake up, execution continues here
+	SystemClock_Config();
+	exit_low_power_mode();
 }
 
 void exit_low_power_mode(void)
