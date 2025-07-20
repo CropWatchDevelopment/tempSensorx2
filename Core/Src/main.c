@@ -40,121 +40,66 @@ void enter_low_power_mode(void);
 void exit_low_power_mode(void);
 /* USER CODE END PFP */
 
+
+
+/********************************************************************************************
+;	Function:		HARDWARE_PWR_SleepOptimisation
+;	Description:	Set Unused Pins for Low Power Optimization
+;	Inputs: 	 	Nothing
+;	Returns:		Nothing
+*********************************************************************************************/
+void HARDWARE_PWR_SleepOptimisation( void )
+{
+
+    GPIO_InitTypeDef GPIO_InitStruct = {0};
+	// Enable GPIOB clock
+	__HAL_RCC_GPIOB_CLK_ENABLE();
+	GPIO_InitStruct.Pin = GPIO_PIN_0  | GPIO_PIN_1 | GPIO_PIN_5  ;
+	GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
+	GPIO_InitStruct.Pull = GPIO_NOPULL;
+	GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
+	HAL_GPIO_Init(GPIOB, &GPIO_InitStruct);
+	HAL_GPIO_WritePin(GPIOB, GPIO_PIN_0 | GPIO_PIN_1 | GPIO_PIN_5 , GPIO_PIN_RESET);
+
+
+	/* Set Pins as Analog Inputs */
+	GPIO_InitStruct.Pin 			= GPIO_PIN_0 | GPIO_PIN_1 | GPIO_PIN_2 | GPIO_PIN_3 | GPIO_PIN_4 | GPIO_PIN_5 | GPIO_PIN_6 | GPIO_PIN_7  | GPIO_PIN_8  | GPIO_PIN_9  | GPIO_PIN_10  | GPIO_PIN_11 | GPIO_PIN_12 | GPIO_PIN_15;
+	GPIO_InitStruct.Mode 			= GPIO_MODE_ANALOG;
+	GPIO_InitStruct.Pull 			= GPIO_NOPULL;
+	GPIO_InitStruct.Speed 			= GPIO_SPEED_FREQ_LOW;
+	HAL_GPIO_Init(GPIOA, &GPIO_InitStruct);
+
+	GPIO_InitStruct.Pin 			= GPIO_PIN_2 |GPIO_PIN_3 | GPIO_PIN_4  | GPIO_PIN_6 | GPIO_PIN_7  | GPIO_PIN_8 | GPIO_PIN_9 | GPIO_PIN_10 | GPIO_PIN_11 | GPIO_PIN_12  | GPIO_PIN_13 | GPIO_PIN_14 | GPIO_PIN_15;
+	GPIO_InitStruct.Mode 			= GPIO_MODE_ANALOG;
+	GPIO_InitStruct.Pull 			= GPIO_NOPULL;
+	GPIO_InitStruct.Speed 			= GPIO_SPEED_FREQ_LOW;
+	HAL_GPIO_Init(GPIOB, &GPIO_InitStruct);
+
+	GPIO_InitStruct.Pin 			= GPIO_PIN_2 |GPIO_PIN_3 | GPIO_PIN_4  | GPIO_PIN_6 | GPIO_PIN_7  | GPIO_PIN_8 | GPIO_PIN_9 | GPIO_PIN_10 | GPIO_PIN_11 | GPIO_PIN_12  | GPIO_PIN_13 | GPIO_PIN_14 | GPIO_PIN_15;
+	GPIO_InitStruct.Mode 			= GPIO_MODE_ANALOG;
+	GPIO_InitStruct.Pull 			= GPIO_NOPULL;
+	GPIO_InitStruct.Speed 			= GPIO_SPEED_FREQ_LOW;
+	HAL_GPIO_Init(GPIOB, &GPIO_InitStruct);
+
+	GPIO_InitStruct.Pin 			= GPIO_PIN_0 | GPIO_PIN_1 |  GPIO_PIN_2 |GPIO_PIN_3 | GPIO_PIN_4  | GPIO_PIN_5  |  GPIO_PIN_6 | GPIO_PIN_7  | GPIO_PIN_8 | GPIO_PIN_9 | GPIO_PIN_10 | GPIO_PIN_11 | GPIO_PIN_12  | GPIO_PIN_13 | GPIO_PIN_14 | GPIO_PIN_15;
+	GPIO_InitStruct.Mode 			= GPIO_MODE_ANALOG;
+	GPIO_InitStruct.Pull 			= GPIO_NOPULL;
+	GPIO_InitStruct.Speed 			= GPIO_SPEED_FREQ_LOW;
+	HAL_GPIO_Init(GPIOB, &GPIO_InitStruct);
+
+}
+
+
+
+
 /* Private user code ---------------------------------------------------------*/
 /* USER CODE BEGIN 0 */
 void enter_low_power_mode(void)
 {
-    // Enable Ultra Low Power mode and Flash power-down
-    HAL_PWREx_EnableUltraLowPower();
-//    HAL_PWREx_EnableFlashPowerDown();
-    
-    // Handle specific pins BEFORE configuring all pins as analog
-    GPIO_InitTypeDef GPIO_InitStruct = {0};
-    
-    // Ensure GPIOB clock is enabled for configuration
-    __HAL_RCC_GPIOB_CLK_ENABLE();
-    
-    // Configure I2C pins as GPIO output low with pull-down to fight external pull-ups
-    GPIO_InitStruct.Pin = GPIO_PIN_6 | GPIO_PIN_7;
-    GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
-    GPIO_InitStruct.Pull = GPIO_PULLDOWN; // Fight external pull-ups
-    GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
-    HAL_GPIO_Init(GPIOB, &GPIO_InitStruct);
-    
-    // Configure PB5 as GPIO output low for sleep mode
-    GPIO_InitStruct.Pin = GPIO_PIN_5;
-    GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
-    GPIO_InitStruct.Pull = GPIO_NOPULL;
-    GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
-    HAL_GPIO_Init(GPIOB, &GPIO_InitStruct);
-    
-    // Set I2C pins and PB5 LOW to prevent current flow
-    HAL_GPIO_WritePin(GPIOB, GPIO_PIN_5 | GPIO_PIN_6 | GPIO_PIN_7, GPIO_PIN_RESET);
-    
-    // Small delay to ensure pins are stable
-    HAL_Delay(1);
-    
-    // Configure all other GPIO pins as analog
-    GPIO_InitStruct.Pin = GPIO_PIN_All;
-    GPIO_InitStruct.Mode = GPIO_MODE_ANALOG;
-    GPIO_InitStruct.Pull = GPIO_NOPULL;
-    
-    // Configure ALL GPIO ports as analog
-    __HAL_RCC_GPIOA_CLK_ENABLE();
-    HAL_GPIO_Init(GPIOA, &GPIO_InitStruct);
-    __HAL_RCC_GPIOA_CLK_DISABLE();
-    
-    // For GPIOB, exclude I2C pins (PB6, PB7) and PB5 from analog configuration
-    GPIO_InitStruct.Pin = GPIO_PIN_All & ~(GPIO_PIN_5 | GPIO_PIN_6 | GPIO_PIN_7);
-    HAL_GPIO_Init(GPIOB, &GPIO_InitStruct);
-    __HAL_RCC_GPIOB_CLK_DISABLE();
-    
-    __HAL_RCC_GPIOC_CLK_ENABLE();
-    HAL_GPIO_Init(GPIOC, &GPIO_InitStruct);
-    __HAL_RCC_GPIOC_CLK_DISABLE();
-    
-    __HAL_RCC_GPIOD_CLK_ENABLE();
-    GPIO_InitStruct.Pin = GPIO_PIN_All;
-    HAL_GPIO_Init(GPIOD, &GPIO_InitStruct);
-    __HAL_RCC_GPIOD_CLK_DISABLE();
-    
-    __HAL_RCC_GPIOH_CLK_ENABLE();
-    HAL_GPIO_Init(GPIOH, &GPIO_InitStruct);
-    __HAL_RCC_GPIOH_CLK_DISABLE();
-    
-    // Disable ALL peripheral clocks and sleep clocks
-    __HAL_RCC_I2C1_CLK_DISABLE();
-    __HAL_RCC_I2C1_CLK_SLEEP_DISABLE();
-    __HAL_RCC_LPUART1_CLK_DISABLE();
-    __HAL_RCC_LPUART1_CLK_SLEEP_DISABLE();
-    __HAL_RCC_DMA1_CLK_DISABLE();
-    __HAL_RCC_DMA1_CLK_SLEEP_DISABLE();
-    __HAL_RCC_ADC1_CLK_DISABLE();
-    __HAL_RCC_ADC1_CLK_SLEEP_DISABLE();
-    
-    // Disable all TIM clocks and sleep clocks
-    __HAL_RCC_TIM2_CLK_DISABLE();
-    __HAL_RCC_TIM3_CLK_DISABLE();
-    __HAL_RCC_TIM6_CLK_DISABLE();
-    __HAL_RCC_TIM7_CLK_DISABLE();
-    __HAL_RCC_TIM21_CLK_DISABLE();
-    __HAL_RCC_TIM22_CLK_DISABLE();
-    
-    // Disable communication peripherals
-    __HAL_RCC_SPI1_CLK_DISABLE();
-    __HAL_RCC_SPI2_CLK_DISABLE();
-    __HAL_RCC_USART1_CLK_DISABLE();
-    __HAL_RCC_USART2_CLK_DISABLE();
-    __HAL_RCC_USART4_CLK_DISABLE();
-    __HAL_RCC_USART5_CLK_DISABLE();
-    
-    // Disable other peripherals
-    __HAL_RCC_USB_CLK_DISABLE();
-    __HAL_RCC_CRC_CLK_DISABLE();
-    __HAL_RCC_TSC_CLK_DISABLE();
-    __HAL_RCC_RNG_CLK_DISABLE();
-    __HAL_RCC_SYSCFG_CLK_DISABLE();
-    
-    // Switch to voltage scale 3 and lowest MSI frequency
-    __HAL_PWR_VOLTAGESCALING_CONFIG(PWR_REGULATOR_VOLTAGE_SCALE3);
-    
-    RCC_OscInitTypeDef RCC_OscInitStruct = {0};
-    RCC_OscInitStruct.OscillatorType = RCC_OSCILLATORTYPE_MSI;
-    RCC_OscInitStruct.MSIState = RCC_MSI_ON;
-    RCC_OscInitStruct.MSICalibrationValue = 0;
-    RCC_OscInitStruct.MSIClockRange = RCC_MSIRANGE_0; // 65.536 kHz
-    RCC_OscInitStruct.PLL.PLLState = RCC_PLL_OFF;
-    HAL_RCC_OscConfig(&RCC_OscInitStruct);
-    
-    RCC_ClkInitTypeDef RCC_ClkInitStruct = {0};
-    RCC_ClkInitStruct.ClockType = RCC_CLOCKTYPE_HCLK|RCC_CLOCKTYPE_SYSCLK
-                                |RCC_CLOCKTYPE_PCLK1|RCC_CLOCKTYPE_PCLK2;
-    RCC_ClkInitStruct.SYSCLKSource = RCC_SYSCLKSOURCE_MSI;
-    RCC_ClkInitStruct.AHBCLKDivider = RCC_SYSCLK_DIV1;
-    RCC_ClkInitStruct.APB1CLKDivider = RCC_HCLK_DIV1;
-    RCC_ClkInitStruct.APB2CLKDivider = RCC_HCLK_DIV1;
-    HAL_RCC_ClockConfig(&RCC_ClkInitStruct, FLASH_LATENCY_0);
-    
+
+
+	HARDWARE_PWR_SleepOptimisation();
+
     // Enter Stop Mode with low power regulator
     HAL_PWR_EnterSTOPMode(PWR_LOWPOWERREGULATOR_ON, PWR_STOPENTRY_WFI);
     
