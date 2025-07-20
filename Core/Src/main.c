@@ -31,6 +31,14 @@
 /* USER CODE BEGIN PV */
 ATC_HandleTypeDef lora;
 bool joined = false;
+
+typedef enum {
+	DEVICE_WAKE,
+	DEVICE_SLEEP,
+	DEVICE_COLLECT_DATA,
+	LORAWAN_JOIN,
+} Device_State_t;
+volatile Device_State_t device_state = LORAWAN_JOIN;
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
@@ -88,6 +96,7 @@ void HAL_RTCEx_WakeUpTimerEventCallback(RTC_HandleTypeDef *hrtc)
 {
   /* Clear wake-up flag */
   __HAL_RTC_WAKEUPTIMER_CLEAR_FLAG(hrtc, RTC_FLAG_WUTF);
+  device_state = DEVICE_COLLECT_DATA;
 }
 
 
@@ -95,7 +104,19 @@ void HAL_RTCEx_WakeUpTimerEventCallback(RTC_HandleTypeDef *hrtc)
 /* USER CODE BEGIN 0 */
 void enter_low_power_mode(void)
 {
+
 	HARDWARE_PWR_SleepOptimisation();
+
+	if (HAL_RTCEx_DeactivateWakeUpTimer(&hrtc) != HAL_OK)
+	    {
+	        Error_Handler();
+	    }
+
+	    /* Configure RTC wake‑up timer for 60 seconds */
+	    if (HAL_RTCEx_SetWakeUpTimer_IT(&hrtc, 59, RTC_WAKEUPCLOCK_CK_SPRE_16BITS) != HAL_OK)
+	    {
+	        Error_Handler();
+	    }
 
 	/* Configure RTC wake-up timer for 60 seconds */
 	if (HAL_RTCEx_SetWakeUpTimer_IT(&hrtc, 59, RTC_WAKEUPCLOCK_CK_SPRE_16BITS) != HAL_OK)
@@ -125,6 +146,7 @@ void exit_low_power_mode(void)
     MX_GPIO_Init();
     MX_LPUART1_UART_Init();
     MX_DMA_Init();
+    device_state = DEVICE_COLLECT_DATA;
 }
 
 
@@ -141,6 +163,7 @@ void cb_JOIN(const char* str)
 	switch (str[7]) {
 		case 'O':
 			joined = true;
+			device_state = DEVICE_COLLECT_DATA;
 			break;
 		case 'F':
 			joined = false;
@@ -207,19 +230,25 @@ int main(void)
   {
       ATC_Loop(&lora);
       
-      // Send AT+JOIN every 10 seconds if not successful
-      if (HAL_GetTick() - last_command_time > 10000 && !joined)
+      switch (device_state)
       {
-    	  resp = ATC_SendReceive(&lora, "AT\r\n", 1000, &ATSEND_Result, 3000, 1, "OK");
-          resp = ATC_SendReceive(&lora, "AT+JOIN\r\n", 1000, &ATSEND_Result, 3000, 1, "OK");
-          last_command_time = HAL_GetTick();
-          
-          // Add breakpoint here to check resp value
-          __NOP();
-      }
-      if (joined)
-      {
-    	  enter_low_power_mode();
+      case LORAWAN_JOIN:
+          if (HAL_GetTick() - last_command_time > 10000 && !joined)
+          {
+        	  resp = ATC_SendReceive(&lora, "AT\r\n", 1000, &ATSEND_Result, 3000, 1, "OK");
+              resp = ATC_SendReceive(&lora, "AT+JOIN\r\n", 1000, &ATSEND_Result, 3000, 1, "OK");
+              last_command_time = HAL_GetTick();
+          }
+	  break;
+	  case DEVICE_SLEEP:
+		  enter_low_power_mode();
+	  break;
+	  case DEVICE_COLLECT_DATA:
+		ATC_SendReceive(&lora, "AT\r\n", 1000, &ATSEND_Result, 3000, 1, "OK");
+		HAL_Delay(10);
+		ATC_SendReceive(&lora, "AT+SEND \"AA\"\r\n", 1000, &ATSEND_Result, 3000, 1, "OK");
+		device_state = DEVICE_SLEEP;
+	  break;
       }
   }
     /* USER CODE END WHILE */
@@ -244,7 +273,7 @@ void SystemClock_Config(void)
   
   // Change to Scale 3 for lowest power:
   __HAL_PWR_VOLTAGESCALING_CONFIG(PWR_REGULATOR_VOLTAGE_SCALE3);
-  
+
   // Also change MSI range to match Scale 3 requirements
   RCC_OscInitStruct.MSIClockRange = RCC_MSIRANGE_0; // 65.536 kHz (matches your low power config)
 
@@ -287,6 +316,14 @@ void SystemClock_Config(void)
 }
 
 /* USER CODE BEGIN 4 */
+void HAL_RTC_AlarmAEventCallback(RTC_HandleTypeDef *hrtc)
+{
+  // RTC Alarm callback - system will wake up from STOP mode
+  // No code needed here, just waking up is enough
+  __NOP();
+
+}
+
 void HAL_UARTEx_RxEventCallback(UART_HandleTypeDef *huart, uint16_t Size)
 {
   if (huart->Instance == LPUART1)
