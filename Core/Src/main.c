@@ -185,7 +185,12 @@ void exit_low_power_mode(void)
     ATC_Init(&lora, &hlpuart1, 512, "LoRaWAN"); // this SHOULD make the ATC serial commands workagain
     ATC_SetEvents(&lora, events);               // Setup all async events again
     device_state = DEVICE_COLLECT_DATA;
-    HAL_GPIO_WritePin(I2C_ENABLE_GPIO_Port, I2C_ENABLE_Pin, GPIO_PIN_SET);
+
+
+    HAL_GPIO_WritePin(DBG_LED_GPIO_Port, DBG_LED_Pin, GPIO_PIN_SET);
+    HAL_Delay(1000);
+    HAL_GPIO_WritePin(DBG_LED_GPIO_Port, DBG_LED_Pin, GPIO_PIN_RESET);
+    HAL_Delay(1000);
 }
 
 /* USER CODE END 0 */
