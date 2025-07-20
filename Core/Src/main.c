@@ -44,16 +44,20 @@ void exit_low_power_mode(void);
 /* USER CODE BEGIN 0 */
 void enter_low_power_mode(void)
 {
+    // Enable Ultra Low Power mode and Flash power-down
+    HAL_PWREx_EnableUltraLowPower();
+//    HAL_PWREx_EnableFlashPowerDown();
+    
     // Handle specific pins BEFORE configuring all pins as analog
     GPIO_InitTypeDef GPIO_InitStruct = {0};
     
     // Ensure GPIOB clock is enabled for configuration
     __HAL_RCC_GPIOB_CLK_ENABLE();
     
-    // Configure I2C pins (PB6, PB7) as GPIO output low to avoid current through pull-ups
+    // Configure I2C pins as GPIO output low with pull-down to fight external pull-ups
     GPIO_InitStruct.Pin = GPIO_PIN_6 | GPIO_PIN_7;
     GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
-    GPIO_InitStruct.Pull = GPIO_NOPULL;
+    GPIO_InitStruct.Pull = GPIO_PULLDOWN; // Fight external pull-ups
     GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
     HAL_GPIO_Init(GPIOB, &GPIO_InitStruct);
     
@@ -70,7 +74,7 @@ void enter_low_power_mode(void)
     // Small delay to ensure pins are stable
     HAL_Delay(1);
     
-    // Now configure all other GPIO pins as analog
+    // Configure all other GPIO pins as analog
     GPIO_InitStruct.Pin = GPIO_PIN_All;
     GPIO_InitStruct.Mode = GPIO_MODE_ANALOG;
     GPIO_InitStruct.Pull = GPIO_NOPULL;
@@ -98,16 +102,17 @@ void enter_low_power_mode(void)
     HAL_GPIO_Init(GPIOH, &GPIO_InitStruct);
     __HAL_RCC_GPIOH_CLK_DISABLE();
     
-    // Disable peripheral clocks that exist on STM32L073
+    // Disable ALL peripheral clocks and sleep clocks
     __HAL_RCC_I2C1_CLK_DISABLE();
+    __HAL_RCC_I2C1_CLK_SLEEP_DISABLE();
     __HAL_RCC_LPUART1_CLK_DISABLE();
+    __HAL_RCC_LPUART1_CLK_SLEEP_DISABLE();
     __HAL_RCC_DMA1_CLK_DISABLE();
-    // Note: DMA2 doesn't exist on STM32L073, removed
-    
-    // Disable ADC
+    __HAL_RCC_DMA1_CLK_SLEEP_DISABLE();
     __HAL_RCC_ADC1_CLK_DISABLE();
+    __HAL_RCC_ADC1_CLK_SLEEP_DISABLE();
     
-    // Disable TIM clocks that exist on STM32L073
+    // Disable all TIM clocks and sleep clocks
     __HAL_RCC_TIM2_CLK_DISABLE();
     __HAL_RCC_TIM3_CLK_DISABLE();
     __HAL_RCC_TIM6_CLK_DISABLE();
@@ -115,7 +120,7 @@ void enter_low_power_mode(void)
     __HAL_RCC_TIM21_CLK_DISABLE();
     __HAL_RCC_TIM22_CLK_DISABLE();
     
-    // Disable communication peripherals that exist on STM32L073
+    // Disable communication peripherals
     __HAL_RCC_SPI1_CLK_DISABLE();
     __HAL_RCC_SPI2_CLK_DISABLE();
     __HAL_RCC_USART1_CLK_DISABLE();
@@ -123,18 +128,16 @@ void enter_low_power_mode(void)
     __HAL_RCC_USART4_CLK_DISABLE();
     __HAL_RCC_USART5_CLK_DISABLE();
     
-    // Disable other peripherals that exist on STM32L073
+    // Disable other peripherals
     __HAL_RCC_USB_CLK_DISABLE();
     __HAL_RCC_CRC_CLK_DISABLE();
     __HAL_RCC_TSC_CLK_DISABLE();
     __HAL_RCC_RNG_CLK_DISABLE();
-    // Note: AES doesn't exist on STM32L073, removed
-    
-    // Disable SYSCFG (but keep RTC enabled!)
     __HAL_RCC_SYSCFG_CLK_DISABLE();
     
-    // Configure the system for lowest power consumption
-    // Switch to MSI at lowest frequency (65.536 kHz)
+    // Switch to voltage scale 3 and lowest MSI frequency
+    __HAL_PWR_VOLTAGESCALING_CONFIG(PWR_REGULATOR_VOLTAGE_SCALE3);
+    
     RCC_OscInitTypeDef RCC_OscInitStruct = {0};
     RCC_OscInitStruct.OscillatorType = RCC_OSCILLATORTYPE_MSI;
     RCC_OscInitStruct.MSIState = RCC_MSI_ON;
@@ -152,11 +155,10 @@ void enter_low_power_mode(void)
     RCC_ClkInitStruct.APB2CLKDivider = RCC_HCLK_DIV1;
     HAL_RCC_ClockConfig(&RCC_ClkInitStruct, FLASH_LATENCY_0);
     
-    // Enter Stop Mode (deepest sleep while keeping RTC)
+    // Enter Stop Mode with low power regulator
     HAL_PWR_EnterSTOPMode(PWR_LOWPOWERREGULATOR_ON, PWR_STOPENTRY_WFI);
     
     // When we wake up, execution continues here
-    // We need to restore the system clock
     SystemClock_Config();
     exit_low_power_mode();
 }
@@ -253,8 +255,6 @@ int main(void)
   char* ATSEND_Result = NULL;
   uint32_t last_command_time = 0;
 
-  enter_low_power_mode();
-
   while(1)
   {
       ATC_Loop(&lora);
@@ -293,6 +293,12 @@ void SystemClock_Config(void)
   /** Configure the main internal regulator output voltage
   */
   __HAL_PWR_VOLTAGESCALING_CONFIG(PWR_REGULATOR_VOLTAGE_SCALE1);
+  
+  // Change to Scale 3 for lowest power:
+  __HAL_PWR_VOLTAGESCALING_CONFIG(PWR_REGULATOR_VOLTAGE_SCALE3);
+  
+  // Also change MSI range to match Scale 3 requirements
+  RCC_OscInitStruct.MSIClockRange = RCC_MSIRANGE_0; // 65.536 kHz (matches your low power config)
 
   /** Initializes the RCC Oscillators according to the specified parameters
   * in the RCC_OscInitTypeDef structure.
@@ -301,7 +307,7 @@ void SystemClock_Config(void)
   RCC_OscInitStruct.LSIState = RCC_LSI_ON;
   RCC_OscInitStruct.MSIState = RCC_MSI_ON;
   RCC_OscInitStruct.MSICalibrationValue = 0;
-  RCC_OscInitStruct.MSIClockRange = RCC_MSIRANGE_5;
+  RCC_OscInitStruct.MSIClockRange = RCC_MSIRANGE_4;
   RCC_OscInitStruct.PLL.PLLState = RCC_PLL_NONE;
   if (HAL_RCC_OscConfig(&RCC_OscInitStruct) != HAL_OK)
   {
