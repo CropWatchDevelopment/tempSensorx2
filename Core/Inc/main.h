@@ -57,8 +57,6 @@ void Error_Handler(void);
 /* USER CODE END EFP */
 
 /* Private defines -----------------------------------------------------------*/
-#define DBG_LED_Pin GPIO_PIN_5
-#define DBG_LED_GPIO_Port GPIOA
 #define I2C_ENABLE_Pin GPIO_PIN_5
 #define I2C_ENABLE_GPIO_Port GPIOB
 

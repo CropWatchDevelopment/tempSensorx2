@@ -1,9 +1,8 @@
-../Core/Src/main.c:107:6:cb_WAKE	16	static
-../Core/Src/main.c:113:6:cb_JOIN_SUCCESS	16	static
-../Core/Src/main.c:117:6:cb_NOT_JOINED	16	static
-../Core/Src/main.c:121:6:cb_DATA_RESPONSE	16	static
-../Core/Src/main.c:154:6:HAL_UARTEx_RxEventCallback	16	static
-../Core/Src/main.c:166:6:HAL_RTCEx_WakeUpTimerEventCallback	16	static
-../Core/Src/main.c:181:5:main	112	static
-../Core/Src/main.c:368:6:SystemClock_Config	136	static
-../Core/Src/main.c:424:6:Error_Handler	8	static,ignoring_inline_asm
+../Core/Src/main.c:40:6:enter_low_power_mode	56	static
+../Core/Src/main.c:84:6:exit_low_power_mode	24	static
+../Core/Src/main.c:102:6:cb_WAKE	16	static,ignoring_inline_asm
+../Core/Src/main.c:117:5:main	32	static
+../Core/Src/main.c:195:6:SystemClock_Config	136	static
+../Core/Src/main.c:242:6:HAL_UARTEx_RxEventCallback	16	static
+../Core/Src/main.c:250:6:HAL_UART_ErrorCallback	16	static
+../Core/Src/main.c:264:6:Error_Handler	8	static

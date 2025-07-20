@@ -1,2 +1,0 @@
-../Core/Src/sensirion/sensirion.c:16:6:scan_i2c_bus	16	static
-../Core/Src/sensirion/sensirion.c:43:5:sensor_init_and_read	8	static

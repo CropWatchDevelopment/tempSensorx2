@@ -3,7 +3,7 @@
 
 #include <stdint.h>
 #include <stdbool.h>
-#include "i2c.h"
+//#include "i2c.h"
 
 // External variable declarations (not definitions)
 extern bool has_sensor_1;
