@@ -30,6 +30,7 @@
 
 /* USER CODE BEGIN PV */
 ATC_HandleTypeDef lora;
+ATC_HandleTypeDef dbg;
 bool joined = false;
 
 typedef enum {
@@ -41,64 +42,12 @@ volatile Device_State_t device_state = LORAWAN_JOIN;
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
+void SystemClock_Config(void);
 /* USER CODE BEGIN PFP */
 void SystemClock_Config(void);
 void enter_low_power_mode(void);
 void exit_low_power_mode(void);
 /* USER CODE END PFP */
-
-
-
-/********************************************************************************************
-;	Function:		HARDWARE_PWR_SleepOptimisation
-;	Description:	Set Unused Pins for Low Power Optimization
-;	Inputs: 	 	Nothing
-;	Returns:		Nothing
-*********************************************************************************************/
-void HARDWARE_PWR_SleepOptimisation( void )
-{
-
-    GPIO_InitTypeDef GPIO_InitStruct = {0};
-	// Enable GPIOB clock
-	__HAL_RCC_GPIOB_CLK_ENABLE();
-	GPIO_InitStruct.Pin = GPIO_PIN_0  | GPIO_PIN_1 | GPIO_PIN_5  ;
-	GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
-	GPIO_InitStruct.Pull = GPIO_NOPULL;
-	GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
-	HAL_GPIO_Init(GPIOB, &GPIO_InitStruct);
-	HAL_GPIO_WritePin(GPIOB, GPIO_PIN_0 | GPIO_PIN_1 | GPIO_PIN_5 , GPIO_PIN_RESET);
-
-
-	/* Set Pins as Analog Inputs */
-	GPIO_InitStruct.Pin 			= GPIO_PIN_0 | GPIO_PIN_1 | GPIO_PIN_2 | GPIO_PIN_3 | GPIO_PIN_4 | GPIO_PIN_5 | GPIO_PIN_6 | GPIO_PIN_7  | GPIO_PIN_8  | GPIO_PIN_9  | GPIO_PIN_10  | GPIO_PIN_11 | GPIO_PIN_12 | GPIO_PIN_15;
-	GPIO_InitStruct.Mode 			= GPIO_MODE_ANALOG;
-	GPIO_InitStruct.Pull 			= GPIO_NOPULL;
-	GPIO_InitStruct.Speed 			= GPIO_SPEED_FREQ_LOW;
-	HAL_GPIO_Init(GPIOA, &GPIO_InitStruct);
-
-	GPIO_InitStruct.Pin 			= GPIO_PIN_2 |GPIO_PIN_3 | GPIO_PIN_4  | GPIO_PIN_6 | GPIO_PIN_7  | GPIO_PIN_8 | GPIO_PIN_9 | GPIO_PIN_10 | GPIO_PIN_11 | GPIO_PIN_12  | GPIO_PIN_13 | GPIO_PIN_14 | GPIO_PIN_15;
-	GPIO_InitStruct.Mode 			= GPIO_MODE_ANALOG;
-	GPIO_InitStruct.Pull 			= GPIO_NOPULL;
-	GPIO_InitStruct.Speed 			= GPIO_SPEED_FREQ_LOW;
-	HAL_GPIO_Init(GPIOB, &GPIO_InitStruct);
-
-	GPIO_InitStruct.Pin 			= GPIO_PIN_0 | GPIO_PIN_1 |  GPIO_PIN_2 |GPIO_PIN_3 | GPIO_PIN_4  | GPIO_PIN_5  |  GPIO_PIN_6 | GPIO_PIN_7  | GPIO_PIN_8 | GPIO_PIN_9 | GPIO_PIN_10 | GPIO_PIN_11 | GPIO_PIN_12  | GPIO_PIN_13 | GPIO_PIN_14 | GPIO_PIN_15;
-	GPIO_InitStruct.Mode 			= GPIO_MODE_ANALOG;
-	GPIO_InitStruct.Pull 			= GPIO_NOPULL;
-	GPIO_InitStruct.Speed 			= GPIO_SPEED_FREQ_LOW;
-	HAL_GPIO_Init(GPIOC, &GPIO_InitStruct);
-
-}
-
-/* Add RTC wake-up interrupt handler */
-void HAL_RTCEx_WakeUpTimerEventCallback(RTC_HandleTypeDef *hrtc)
-{
-  /* Clear wake-up flag */
-  __HAL_RTC_WAKEUPTIMER_CLEAR_FLAG(hrtc, RTC_FLAG_WUTF);
-  device_state = DEVICE_COLLECT_DATA;
-  exit_low_power_mode();
-}
-
 
 /* Private user code ---------------------------------------------------------*/
 /* USER CODE BEGIN 0 */
@@ -139,10 +88,11 @@ const ATC_EventTypeDef events[] = {
 void enter_low_power_mode(void)
 {
 
+	ATC_SendReceive(&dbg, "Going to sleep\r\n", 1000, NULL, 3000, 1, "OK");
 	// De-init I2C
 	HAL_I2C_DeInit(&hi2c1);
 
-	HARDWARE_PWR_SleepOptimisation();
+//	HARDWARE_PWR_SleepOptimisation(); // WHERE DID THIS GO????
 
 	if (HAL_RTCEx_DeactivateWakeUpTimer(&hrtc) != HAL_OK)
 	    {
@@ -184,16 +134,14 @@ void exit_low_power_mode(void)
     MX_DMA_Init();                              // I did this because it is in the same order as it was generated
     MX_I2C1_Init();
     MX_LPUART1_UART_Init();
+    MX_USART1_UART_Init();
     MX_RTC_Init();
     ATC_Init(&lora, &hlpuart1, 512, "LoRaWAN"); // this SHOULD make the ATC serial commands workagain
+    ATC_Init(&dbg, &huart1, 512, "Debug");
     ATC_SetEvents(&lora, events);               // Setup all async events again
     device_state = DEVICE_COLLECT_DATA;
 
-
-    HAL_GPIO_WritePin(I2C_ENABLE_GPIO_Port, I2C_ENABLE_Pin, GPIO_PIN_SET);
-    HAL_Delay(1000);
-    HAL_GPIO_WritePin(I2C_ENABLE_GPIO_Port, I2C_ENABLE_Pin, GPIO_PIN_RESET);
-    HAL_Delay(1000);
+    ATC_SendReceive(&dbg, "Waking UP!\r\n", 1000, NULL, 3000, 1, "OK");
 }
 
 /* USER CODE END 0 */
@@ -228,12 +176,14 @@ int main(void)
   MX_I2C1_Init();
   MX_LPUART1_UART_Init();
   MX_RTC_Init();
+  MX_USART1_UART_Init();
   /* USER CODE BEGIN 2 */
   // Initialize the ATC handle before using it
   ATC_Init(&lora, &hlpuart1, 512, "LoRaWAN"); // Adjust buffer size as needed
+  ATC_Init(&dbg, &huart1, 512, "Debug");
   ATC_SetEvents(&lora, events);
 
-
+  ATC_SendReceive(&dbg, "RDY\r\n", 1000, NULL, 3000, 1, "OK");
   HAL_Delay(10000); // This makes it easier to debug, don't remove
   /* USER CODE END 2 */
 
@@ -261,6 +211,7 @@ int main(void)
 		  enter_low_power_mode();
 	  break;
 	  case DEVICE_COLLECT_DATA:
+		  ATC_SendReceive(&dbg, "Sending data...\r\n", 1000, NULL, 3000, 1, "OK");
 		  // what sucks is when the device sleeps, I loose debugger session, so i can't get a break point here after sleep!
 		  ATC_SendReceive(&lora, "AT\r\n", 1000, &ATSEND_Result, 3000, 1, "OK");
 		  ATC_SendReceive(&lora, "AT+SEND \"AA\"\r\n", 1000, &ATSEND_Result, 3000, 1, "OK");
@@ -287,12 +238,6 @@ void SystemClock_Config(void)
   /** Configure the main internal regulator output voltage
   */
   __HAL_PWR_VOLTAGESCALING_CONFIG(PWR_REGULATOR_VOLTAGE_SCALE1);
-  
-  // Change to Scale 3 for lowest power:
-  __HAL_PWR_VOLTAGESCALING_CONFIG(PWR_REGULATOR_VOLTAGE_SCALE3);
-
-  // Also change MSI range to match Scale 3 requirements
-  RCC_OscInitStruct.MSIClockRange = RCC_MSIRANGE_0; // 65.536 kHz (matches your low power config)
 
   /** Initializes the RCC Oscillators according to the specified parameters
   * in the RCC_OscInitTypeDef structure.
@@ -321,8 +266,9 @@ void SystemClock_Config(void)
   {
     Error_Handler();
   }
-  PeriphClkInit.PeriphClockSelection = RCC_PERIPHCLK_LPUART1|RCC_PERIPHCLK_I2C1
-                              |RCC_PERIPHCLK_RTC;
+  PeriphClkInit.PeriphClockSelection = RCC_PERIPHCLK_USART1|RCC_PERIPHCLK_LPUART1
+                              |RCC_PERIPHCLK_I2C1|RCC_PERIPHCLK_RTC;
+  PeriphClkInit.Usart1ClockSelection = RCC_USART1CLKSOURCE_PCLK2;
   PeriphClkInit.Lpuart1ClockSelection = RCC_LPUART1CLKSOURCE_PCLK1;
   PeriphClkInit.I2c1ClockSelection = RCC_I2C1CLKSOURCE_PCLK1;
   PeriphClkInit.RTCClockSelection = RCC_RTCCLKSOURCE_LSI;

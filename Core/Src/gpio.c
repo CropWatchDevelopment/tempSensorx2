@@ -54,7 +54,7 @@ void MX_GPIO_Init(void)
 
   /*Configure GPIO pin : DBG_LED_Pin */
   GPIO_InitStruct.Pin = DBG_LED_Pin;
-  GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
+  GPIO_InitStruct.Mode = GPIO_MODE_INPUT;
   GPIO_InitStruct.Pull = GPIO_NOPULL;
   HAL_GPIO_Init(DBG_LED_GPIO_Port, &GPIO_InitStruct);
 

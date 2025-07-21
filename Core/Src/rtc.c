@@ -30,52 +30,38 @@ RTC_HandleTypeDef hrtc;
 void MX_RTC_Init(void)
 {
 
-	RTC_TimeTypeDef sTime = {0};
-	RTC_DateTypeDef sDate = {0};
+  /* USER CODE BEGIN RTC_Init 0 */
 
-	/* Initialize RTC */
-	hrtc.Instance = RTC;
-	hrtc.Init.HourFormat = RTC_HOURFORMAT_24;
-	hrtc.Init.AsynchPrediv = 127; /* LSI ~32 kHz, 128 gives ~250 Hz */
-	hrtc.Init.SynchPrediv = 249;  /* 250 Hz / 250 = 1 Hz */
-	hrtc.Init.OutPut = RTC_OUTPUT_DISABLE;
-	hrtc.Init.OutPutPolarity = RTC_OUTPUT_POLARITY_HIGH;
-	hrtc.Init.OutPutType = RTC_OUTPUT_TYPE_OPENDRAIN;
+  /* USER CODE END RTC_Init 0 */
 
-	if (HAL_RTC_Init(&hrtc) != HAL_OK)
-	{
-	Error_Handler();
-	}
+  /* USER CODE BEGIN RTC_Init 1 */
 
-	/* Set initial time and date (optional, for completeness) */
-	sTime.Hours = 0;
-	sTime.Minutes = 0;
-	sTime.Seconds = 0;
-	sTime.DayLightSaving = RTC_DAYLIGHTSAVING_NONE;
-	sTime.StoreOperation = RTC_STOREOPERATION_RESET;
-	if (HAL_RTC_SetTime(&hrtc, &sTime, RTC_FORMAT_BCD) != HAL_OK)
-	{
-	Error_Handler();
-	}
+  /* USER CODE END RTC_Init 1 */
 
-	sDate.WeekDay = RTC_WEEKDAY_MONDAY;
-	sDate.Month = RTC_MONTH_JANUARY;
-	sDate.Date = 1;
-	sDate.Year = 0;
-	if (HAL_RTC_SetDate(&hrtc, &sDate, RTC_FORMAT_BCD) != HAL_OK)
-	{
-	Error_Handler();
-	}
+  /** Initialize RTC Only
+  */
+  hrtc.Instance = RTC;
+  hrtc.Init.HourFormat = RTC_HOURFORMAT_24;
+  hrtc.Init.AsynchPrediv = 127;
+  hrtc.Init.SynchPrediv = 255;
+  hrtc.Init.OutPut = RTC_OUTPUT_DISABLE;
+  hrtc.Init.OutPutRemap = RTC_OUTPUT_REMAP_NONE;
+  hrtc.Init.OutPutPolarity = RTC_OUTPUT_POLARITY_HIGH;
+  hrtc.Init.OutPutType = RTC_OUTPUT_TYPE_OPENDRAIN;
+  if (HAL_RTC_Init(&hrtc) != HAL_OK)
+  {
+    Error_Handler();
+  }
 
-	/* Enable wake-up timer for 60 seconds */
-	if (HAL_RTCEx_SetWakeUpTimer_IT(&hrtc, 59, RTC_WAKEUPCLOCK_CK_SPRE_16BITS) != HAL_OK)
-	{
-	Error_Handler();
-	}
+  /** Enable the WakeUp
+  */
+  if (HAL_RTCEx_SetWakeUpTimer_IT(&hrtc, 0x500B, RTC_WAKEUPCLOCK_RTCCLK_DIV16) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  /* USER CODE BEGIN RTC_Init 2 */
 
-	/* Enable RTC interrupt in NVIC */
-	HAL_NVIC_SetPriority(RTC_IRQn, 0, 0);
-	HAL_NVIC_EnableIRQ(RTC_IRQn);
+  /* USER CODE END RTC_Init 2 */
 
 }
 
