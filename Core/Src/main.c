@@ -139,6 +139,9 @@ const ATC_EventTypeDef events[] = {
 void enter_low_power_mode(void)
 {
 
+	// De-init I2C
+	HAL_I2C_DeInit(&hi2c1);
+
 	HARDWARE_PWR_SleepOptimisation();
 
 	if (HAL_RTCEx_DeactivateWakeUpTimer(&hrtc) != HAL_OK)
@@ -187,9 +190,9 @@ void exit_low_power_mode(void)
     device_state = DEVICE_COLLECT_DATA;
 
 
-    HAL_GPIO_WritePin(DBG_LED_GPIO_Port, DBG_LED_Pin, GPIO_PIN_SET);
+    HAL_GPIO_WritePin(I2C_ENABLE_GPIO_Port, I2C_ENABLE_Pin, GPIO_PIN_SET);
     HAL_Delay(1000);
-    HAL_GPIO_WritePin(DBG_LED_GPIO_Port, DBG_LED_Pin, GPIO_PIN_RESET);
+    HAL_GPIO_WritePin(I2C_ENABLE_GPIO_Port, I2C_ENABLE_Pin, GPIO_PIN_RESET);
     HAL_Delay(1000);
 }
 
