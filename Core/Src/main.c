@@ -127,7 +127,12 @@ void enter_low_power_mode(void)
 	__HAL_UART_CLEAR_FLAG(&hlpuart1, UART_FLAG_RXNE | UART_FLAG_IDLE); // Clear any pending flags
 	HAL_UARTEx_DisableStopMode(&hlpuart1); // Explicitly disable LPUART wake-up from Stop mode
 
-//	HARDWARE_PWR_SleepOptimisation(); // WHERE DID THIS GO????
+
+
+	// Disable EXTI interrupts to prevent GPIO-related wake-ups
+	    for (uint32_t i = 0; i <= 15; i++) {
+	        HAL_NVIC_DisableIRQ(i); // Disable EXTI lines 0-15
+	    }
 
 	if (HAL_RTCEx_DeactivateWakeUpTimer(&hrtc) != HAL_OK)
 	    {
@@ -146,9 +151,20 @@ void enter_low_power_mode(void)
 	Error_Handler();
 	}
 
-	// Clear any pending interrupts to prevent spurious wake-ups
+	// Clear all pending interrupts to prevent spurious wake-ups
 	__HAL_RCC_CLEAR_RESET_FLAGS();
-	NVIC_ClearPendingIRQ(LPUART1_IRQn); // Clear pending LPUART interrupts
+	NVIC_ClearPendingIRQ(LPUART1_IRQn);
+	NVIC_ClearPendingIRQ(USART1_IRQn);
+	NVIC_ClearPendingIRQ(RTC_IRQn); // Clear RTC interrupt pending bits
+	__HAL_RTC_WAKEUPTIMER_CLEAR_FLAG(&hrtc, RTC_FLAG_WUTF); // Clear RTC wake-up flag
+
+	// Disable unused peripheral clocks to reduce power consumption
+	__HAL_RCC_I2C1_CLK_DISABLE();
+	__HAL_RCC_USART1_CLK_DISABLE();
+	__HAL_RCC_DMA1_CLK_DISABLE();
+
+	// Ensure debug connection is disabled in Stop mode (if using SWD/JTAG)
+	DBGMCU->CR &= ~(DBGMCU_CR_DBG_STOP); // Disable debug in Stop mode
 
 	// Enter Stop Mode with low power regulator
 	HAL_PWR_EnterSTOPMode(PWR_LOWPOWERREGULATOR_ON, PWR_STOPENTRY_WFI);
