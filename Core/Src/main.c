@@ -146,6 +146,10 @@ void enter_low_power_mode(void)
 	Error_Handler();
 	}
 
+	// Clear any pending interrupts to prevent spurious wake-ups
+	__HAL_RCC_CLEAR_RESET_FLAGS();
+	NVIC_ClearPendingIRQ(LPUART1_IRQn); // Clear pending LPUART interrupts
+
 	// Enter Stop Mode with low power regulator
 	HAL_PWR_EnterSTOPMode(PWR_LOWPOWERREGULATOR_ON, PWR_STOPENTRY_WFI);
 
