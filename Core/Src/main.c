@@ -118,6 +118,14 @@ void enter_low_power_mode(void)
 	// De-init I2C
 	HAL_I2C_DeInit(&hi2c1);
 	HAL_UART_DeInit(&huart1);
+	// De-init LPUART1 (LoRaWAN UART)
+	HAL_UART_DeInit(&hlpuart1);
+
+	// Disable LPUART wake-up from Stop mode
+	__HAL_UART_DISABLE_IT(&hlpuart1, UART_IT_RXNE); // Disable RXNE interrupt
+	__HAL_UART_DISABLE_IT(&hlpuart1, UART_IT_IDLE); // Disable IDLE interrupt
+	__HAL_UART_CLEAR_FLAG(&hlpuart1, UART_FLAG_RXNE | UART_FLAG_IDLE); // Clear any pending flags
+	HAL_UARTEx_DisableStopMode(&hlpuart1); // Explicitly disable LPUART wake-up from Stop mode
 
 //	HARDWARE_PWR_SleepOptimisation(); // WHERE DID THIS GO????
 

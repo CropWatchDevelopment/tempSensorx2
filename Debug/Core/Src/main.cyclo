@@ -4,10 +4,10 @@
 ../Core/Src/main.c:86:6:Get_RTC_Timestamp	1
 ../Core/Src/main.c:100:6:Debug_Print	1
 ../Core/Src/main.c:114:6:enter_low_power_mode	4
-../Core/Src/main.c:149:6:exit_low_power_mode	1
-../Core/Src/main.c:181:5:main	4
-../Core/Src/main.c:266:6:SystemClock_Config	4
-../Core/Src/main.c:316:6:HAL_RTC_AlarmAEventCallback	1
-../Core/Src/main.c:324:6:HAL_UARTEx_RxEventCallback	2
-../Core/Src/main.c:332:6:HAL_UART_ErrorCallback	2
-../Core/Src/main.c:346:6:Error_Handler	1
+../Core/Src/main.c:157:6:exit_low_power_mode	1
+../Core/Src/main.c:189:5:main	4
+../Core/Src/main.c:274:6:SystemClock_Config	4
+../Core/Src/main.c:324:6:HAL_RTC_AlarmAEventCallback	1
+../Core/Src/main.c:332:6:HAL_UARTEx_RxEventCallback	2
+../Core/Src/main.c:340:6:HAL_UART_ErrorCallback	2
+../Core/Src/main.c:354:6:Error_Handler	1
