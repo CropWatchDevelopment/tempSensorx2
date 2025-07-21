@@ -83,12 +83,38 @@ const ATC_EventTypeDef events[] = {
 	{ NULL,              NULL                   }  // CRITICAL: Add this terminator!
 };
 
+void Get_RTC_Timestamp(char *buffer, uint16_t buffer_size) {
+    RTC_DateTypeDef sDate = {0};
+    RTC_TimeTypeDef sTime = {0};
 
+    // Get the current time and date
+    HAL_RTC_GetTime(&hrtc, &sTime, RTC_FORMAT_BIN);
+    HAL_RTC_GetDate(&hrtc, &sDate, RTC_FORMAT_BIN);
+
+    // Format the timestamp as [YYYY-MM-DD HH:MM:SS]
+    snprintf(buffer, buffer_size, "[20%02d-%02d-%02d %02d:%02d:%02d] ",
+             sDate.Year, sDate.Month, sDate.Date,
+             sTime.Hours, sTime.Minutes, sTime.Seconds);
+}
+
+void Debug_Print(const char *message) {
+    char buffer[256]; // Adjust size as needed
+    char timestamp[32];
+
+    // Get the timestamp
+    Get_RTC_Timestamp(timestamp, sizeof(timestamp));
+
+    // Combine timestamp and message
+    snprintf(buffer, sizeof(buffer), "%s%s", timestamp, message);
+
+    // Send the debug message
+    ATC_SendReceive(&dbg, buffer, 1000, NULL, 3000, 1, "OK");
+}
 
 void enter_low_power_mode(void)
 {
+	Debug_Print("Going to sleep\r\n");
 
-	ATC_SendReceive(&dbg, "Going to sleep\r\n", 1000, NULL, 3000, 1, "OK");
 	// De-init I2C
 	HAL_I2C_DeInit(&hi2c1);
 	HAL_UART_DeInit(&huart1);
@@ -142,7 +168,8 @@ void exit_low_power_mode(void)
     ATC_SetEvents(&lora, events);               // Setup all async events again
     device_state = DEVICE_COLLECT_DATA;
 
-    ATC_SendReceive(&dbg, "Waking UP!\r\n", 1000, NULL, 3000, 1, "OK");
+	Debug_Print("Waking UP!\r\n");
+
 }
 
 /* USER CODE END 0 */
@@ -184,7 +211,8 @@ int main(void)
   ATC_Init(&dbg, &huart1, 512, "Debug");
   ATC_SetEvents(&lora, events);
 
-  ATC_SendReceive(&dbg, "RDY\r\n", 1000, NULL, 3000, 1, "OK");
+  Debug_Print("RDY\r\n");
+
   HAL_Delay(10000); // This makes it easier to debug, don't remove
   /* USER CODE END 2 */
 
@@ -193,14 +221,14 @@ int main(void)
   char* ATSEND_Result = NULL;
   uint32_t last_command_time = 0;
 
-  ATC_SendReceive(&dbg, "DeviceState=Sleep\r\n", 1000, NULL, 3000, 1, "OK");
+  Debug_Print("DeviceState=Sleep\r\n");
   HAL_Delay(100); // This makes it easier to debug, don't remove
   device_state = DEVICE_SLEEP;
 
   while(1)
   {
      // ATC_Loop(&lora);
-      ATC_SendReceive(&dbg, "loop!!!\r\n", 1000, NULL, 3000, 1, "OK");
+	  Debug_Print("loop!!!\r\n");
       HAL_Delay(100); // This makes it easier to debug, don't remove
       switch (device_state)
       {
