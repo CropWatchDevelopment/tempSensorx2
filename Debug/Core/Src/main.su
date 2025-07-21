@@ -2,10 +2,10 @@
 ../Core/Src/main.c:58:6:cb_OK	16	static,ignoring_inline_asm
 ../Core/Src/main.c:62:6:cb_JOIN	16	static,ignoring_inline_asm
 ../Core/Src/main.c:88:6:enter_low_power_mode	24	static
-../Core/Src/main.c:122:6:exit_low_power_mode	40	static
-../Core/Src/main.c:154:5:main	40	static
-../Core/Src/main.c:233:6:SystemClock_Config	136	static
-../Core/Src/main.c:283:6:HAL_RTC_AlarmAEventCallback	16	static,ignoring_inline_asm
-../Core/Src/main.c:291:6:HAL_UARTEx_RxEventCallback	16	static
-../Core/Src/main.c:299:6:HAL_UART_ErrorCallback	16	static
-../Core/Src/main.c:313:6:Error_Handler	8	static
+../Core/Src/main.c:123:6:exit_low_power_mode	40	static
+../Core/Src/main.c:154:5:main	32	static
+../Core/Src/main.c:238:6:SystemClock_Config	136	static
+../Core/Src/main.c:288:6:HAL_RTC_AlarmAEventCallback	16	static,ignoring_inline_asm
+../Core/Src/main.c:296:6:HAL_UARTEx_RxEventCallback	16	static
+../Core/Src/main.c:304:6:HAL_UART_ErrorCallback	16	static
+../Core/Src/main.c:318:6:Error_Handler	8	static

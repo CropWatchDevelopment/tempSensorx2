@@ -91,6 +91,7 @@ void enter_low_power_mode(void)
 	ATC_SendReceive(&dbg, "Going to sleep\r\n", 1000, NULL, 3000, 1, "OK");
 	// De-init I2C
 	HAL_I2C_DeInit(&hi2c1);
+	HAL_UART_DeInit(&huart1);
 
 //	HARDWARE_PWR_SleepOptimisation(); // WHERE DID THIS GO????
 
@@ -192,30 +193,35 @@ int main(void)
   char* ATSEND_Result = NULL;
   uint32_t last_command_time = 0;
 
+  ATC_SendReceive(&dbg, "DeviceState=Sleep\r\n", 1000, NULL, 3000, 1, "OK");
+  HAL_Delay(100); // This makes it easier to debug, don't remove
+  device_state = DEVICE_SLEEP;
+
   while(1)
   {
-      ATC_Loop(&lora);
-      
+     // ATC_Loop(&lora);
+      ATC_SendReceive(&dbg, "loop!!!\r\n", 1000, NULL, 3000, 1, "OK");
+      HAL_Delay(100); // This makes it easier to debug, don't remove
       switch (device_state)
       {
       case LORAWAN_JOIN:
-          if (HAL_GetTick() - last_command_time > 10000 && !joined)
-          {
-        	  // this always works
-        	  ATC_SendReceive(&lora, "AT\r\n", 1000, &ATSEND_Result, 3000, 1, "OK"); // This wakes the LoRa Module, it can be anything, so AT is best
-              ATC_SendReceive(&lora, "AT+JOIN\r\n", 1000, &ATSEND_Result, 3000, 1, "OK");
-              last_command_time = HAL_GetTick();
-          }
+//          if (HAL_GetTick() - last_command_time > 10000 && !joined)
+//          {
+//        	  // this always works
+//        	  ATC_SendReceive(&lora, "AT\r\n", 1000, &ATSEND_Result, 3000, 1, "OK"); // This wakes the LoRa Module, it can be anything, so AT is best
+//              ATC_SendReceive(&lora, "AT+JOIN\r\n", 1000, &ATSEND_Result, 3000, 1, "OK");
+//              last_command_time = HAL_GetTick();
+//          }
 	  break;
 	  case DEVICE_SLEEP:
 		  enter_low_power_mode();
 	  break;
 	  case DEVICE_COLLECT_DATA:
-		  ATC_SendReceive(&dbg, "Sending data...\r\n", 1000, NULL, 3000, 1, "OK");
-		  // what sucks is when the device sleeps, I loose debugger session, so i can't get a break point here after sleep!
-		  ATC_SendReceive(&lora, "AT\r\n", 1000, &ATSEND_Result, 3000, 1, "OK");
-		  ATC_SendReceive(&lora, "AT+SEND \"AA\"\r\n", 1000, &ATSEND_Result, 3000, 1, "OK");
-		  device_state = DEVICE_SLEEP;
+//		  ATC_SendReceive(&dbg, "Sending data...\r\n", 1000, NULL, 3000, 1, "OK");
+//		  // what sucks is when the device sleeps, I loose debugger session, so i can't get a break point here after sleep!
+//		  ATC_SendReceive(&lora, "AT\r\n", 1000, &ATSEND_Result, 3000, 1, "OK");
+//		  ATC_SendReceive(&lora, "AT+SEND \"AA\"\r\n", 1000, &ATSEND_Result, 3000, 1, "OK");
+//		  device_state = DEVICE_SLEEP;
 	  break;
       }
   }
