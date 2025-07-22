@@ -130,20 +130,14 @@ void enter_low_power_mode(void)
 
 
 	// Disable EXTI interrupts to prevent GPIO-related wake-ups
-	    for (uint32_t i = 0; i <= 15; i++) {
-	        HAL_NVIC_DisableIRQ(i); // Disable EXTI lines 0-15
-	    }
+	for (uint32_t i = 0; i <= 15; i++) {
+		HAL_NVIC_DisableIRQ(i); // Disable EXTI lines 0-15
+	}
 
 	if (HAL_RTCEx_DeactivateWakeUpTimer(&hrtc) != HAL_OK)
-	    {
-	        Error_Handler();
-	    }
-
-	    /* Configure RTC wake‑up timer for 60 seconds */
-	    if (HAL_RTCEx_SetWakeUpTimer_IT(&hrtc, 59, RTC_WAKEUPCLOCK_CK_SPRE_16BITS) != HAL_OK)
-	    {
-	        Error_Handler();
-	    }
+	{
+		Error_Handler();
+	}
 
 	/* Configure RTC wake-up timer for 60 seconds */
 	if (HAL_RTCEx_SetWakeUpTimer_IT(&hrtc, 59, RTC_WAKEUPCLOCK_CK_SPRE_16BITS) != HAL_OK)
@@ -255,7 +249,7 @@ int main(void)
 
   while(1)
   {
-     // ATC_Loop(&lora);
+      ATC_Loop(&lora);
 	  Debug_Print("loop!!!\r\n");
       HAL_Delay(100); // This makes it easier to debug, don't remove
       switch (device_state)
@@ -277,7 +271,7 @@ int main(void)
 //		  // what sucks is when the device sleeps, I loose debugger session, so i can't get a break point here after sleep!
 //		  ATC_SendReceive(&lora, "AT\r\n", 1000, &ATSEND_Result, 3000, 1, "OK");
 //		  ATC_SendReceive(&lora, "AT+SEND \"AA\"\r\n", 1000, &ATSEND_Result, 3000, 1, "OK");
-//		  device_state = DEVICE_SLEEP;
+		  device_state = DEVICE_SLEEP;
 	  break;
       }
   }
