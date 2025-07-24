@@ -1,0 +1,7 @@
+../Core/Src/lorawan/lorawan_serial.c:19:13:clear_buffers	16	static
+../Core/Src/lorawan/lorawan_serial.c:26:19:LoRaSerial_Init	24	static
+../Core/Src/lorawan/lorawan_serial.c:50:19:LoRaSerial_Send	24	static
+../Core/Src/lorawan/lorawan_serial.c:63:13:push_byte	24	static
+../Core/Src/lorawan/lorawan_serial.c:76:6:LoRaSerial_RxCpltCallback	32	static
+../Core/Src/lorawan/lorawan_serial.c:111:19:LoRaSerial_EnterLowPower	24	static
+../Core/Src/lorawan/lorawan_serial.c:143:19:LoRaSerial_ExitLowPower	16	static

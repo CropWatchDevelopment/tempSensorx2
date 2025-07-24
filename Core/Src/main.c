@@ -10,8 +10,11 @@
 
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
+#include "lorawan/lorawan_serial.h"
 #include "atc.h"
 #include <stdbool.h>
+#include <stdio.h>
+#include <string.h>
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -29,8 +32,9 @@
 /* Private variables ---------------------------------------------------------*/
 
 /* USER CODE BEGIN PV */
-ATC_HandleTypeDef lora;
-ATC_HandleTypeDef dbg;
+static uint8_t loraRxBuf[128];
+LoRaSerial_HandleTypeDef hLora;
+ATC_HandleTypeDef lora;  // ATC handle for compatibility
 bool joined = false;
 
 typedef enum {
@@ -51,37 +55,21 @@ void exit_low_power_mode(void);
 
 /* Private user code ---------------------------------------------------------*/
 /* USER CODE BEGIN 0 */
-void cb_WAKE(const char* str)
-{
-  __NOP();
-}
-void cb_OK(const char* str)
-{
-  __NOP();
-}
-void cb_JOIN(const char* str)
-{
-	switch (str[7]) {
-		case 'O':
-			joined = true;
-			device_state = DEVICE_COLLECT_DATA;
-			break;
-		case 'F':
-			joined = false;
-			break;
-		default:
-			__NOP();
-	}
-	HAL_Delay(500);
-}
 
-const ATC_EventTypeDef events[] = {
-	/* MODULE STATUS CALLBACKS */
-    { "WAKE",            cb_WAKE                }, // i will remove this too
-	{ "OK",              cb_OK                  }, // I will remove this later as it is not imporant to know this
-	{ "JOIN: [",         cb_JOIN                },
-	{ NULL,              NULL                   }  // CRITICAL: Add this terminator!
-};
+// LoRaSerial callback for handling received lines
+void LoraLineHandler(const char *line)
+{
+    // Handle JOIN responses
+    if (strstr(line, "JOIN: ") != NULL) {
+        if (strstr(line, "JOIN: OK") != NULL) {
+            joined = true;
+            device_state = DEVICE_COLLECT_DATA;
+        } else if (strstr(line, "JOIN: FAILED") != NULL) {
+            joined = false;
+        }
+    }
+    // Add other AT command response handling as needed
+}
 
 void Get_RTC_Timestamp(char *buffer, uint16_t buffer_size) {
     RTC_DateTypeDef sDate = {0};
@@ -107,33 +95,42 @@ void Debug_Print(const char *message) {
     // Combine timestamp and message
     snprintf(buffer, sizeof(buffer), "%s%s", timestamp, message);
 
-    // Send the debug message
-    ATC_SendReceive(&dbg, buffer, 1000, NULL, 3000, 1, "OK");
+    // Send the debug message using HAL directly
+    HAL_UART_Transmit(&huart1, (uint8_t*)buffer, strlen(buffer), 1000);
 }
 
 void enter_low_power_mode(void)
 {
 	Debug_Print("Going to sleep\r\n");
 
-	// De-init I2C
+	// Wait for UART transmission to complete before entering low power
+	while (__HAL_UART_GET_FLAG(&huart1, UART_FLAG_TC) == RESET);
+	while (__HAL_UART_GET_FLAG(&hlpuart1, UART_FLAG_TC) == RESET);
+	
+	// Wait for LPUART to be idle and ready
+	while (__HAL_UART_GET_FLAG(&hlpuart1, UART_FLAG_BUSY) == SET);
+	while (__HAL_UART_GET_FLAG(&hlpuart1, UART_FLAG_REACK) == RESET);
+
+	// Prepare LoRa serial for low power mode
+	LoRaSerial_EnterLowPower(&hLora);
+
+	// De-init I2C and debug UART to avoid spurious interrupts
 	HAL_I2C_DeInit(&hi2c1);
 	HAL_UART_DeInit(&huart1);
-	// De-init LPUART1 (LoRaWAN UART)
-	HAL_UART_DeInit(&hlpuart1);
-
-	// Disable LPUART wake-up from Stop mode
-	__HAL_UART_DISABLE_IT(&hlpuart1, UART_IT_RXNE); // Disable RXNE interrupt
-	__HAL_UART_DISABLE_IT(&hlpuart1, UART_IT_IDLE); // Disable IDLE interrupt
-	__HAL_UART_CLEAR_FLAG(&hlpuart1, UART_FLAG_RXNE | UART_FLAG_IDLE); // Clear any pending flags
-	HAL_UARTEx_DisableStopMode(&hlpuart1); // Explicitly disable LPUART wake-up from Stop mode
-
-
 
 	// Disable EXTI interrupts to prevent GPIO-related wake-ups
-	for (uint32_t i = 0; i <= 15; i++) {
-		HAL_NVIC_DisableIRQ(i); // Disable EXTI lines 0-15
-	}
+	HAL_NVIC_DisableIRQ(EXTI0_1_IRQn);
+	HAL_NVIC_DisableIRQ(EXTI2_3_IRQn);
+	HAL_NVIC_DisableIRQ(EXTI4_15_IRQn);
 
+	// Disable DMA interrupts that could cause wake-ups
+	HAL_NVIC_DisableIRQ(DMA1_Channel2_3_IRQn);
+	HAL_NVIC_DisableIRQ(DMA1_Channel4_5_6_7_IRQn);
+
+	// Disable UART interrupts except for LPUART1 wake-up
+	HAL_NVIC_DisableIRQ(USART1_IRQn);
+
+	// Configure RTC wake-up timer first, then deactivate any existing timer
 	if (HAL_RTCEx_DeactivateWakeUpTimer(&hrtc) != HAL_OK)
 	{
 		Error_Handler();
@@ -142,28 +139,38 @@ void enter_low_power_mode(void)
 	/* Configure RTC wake-up timer for 60 seconds */
 	if (HAL_RTCEx_SetWakeUpTimer_IT(&hrtc, 59, RTC_WAKEUPCLOCK_CK_SPRE_16BITS) != HAL_OK)
 	{
-	Error_Handler();
+		Error_Handler();
 	}
 
 	// Clear all pending interrupts to prevent spurious wake-ups
 	__HAL_RCC_CLEAR_RESET_FLAGS();
-	NVIC_ClearPendingIRQ(LPUART1_IRQn);
+	__HAL_PWR_CLEAR_FLAG(PWR_FLAG_WU);  // Clear wake-up flag
+	NVIC_ClearPendingIRQ(RNG_LPUART1_IRQn);
 	NVIC_ClearPendingIRQ(USART1_IRQn);
-	NVIC_ClearPendingIRQ(RTC_IRQn); // Clear RTC interrupt pending bits
-	__HAL_RTC_WAKEUPTIMER_CLEAR_FLAG(&hrtc, RTC_FLAG_WUTF); // Clear RTC wake-up flag
+	NVIC_ClearPendingIRQ(RTC_IRQn);
+	NVIC_ClearPendingIRQ(DMA1_Channel2_3_IRQn);
+	NVIC_ClearPendingIRQ(DMA1_Channel4_5_6_7_IRQn);
+	__HAL_RTC_WAKEUPTIMER_CLEAR_FLAG(&hrtc, RTC_FLAG_WUTF);
+
+	// Clear any UART error flags
+	__HAL_UART_CLEAR_FLAG(&hlpuart1, UART_CLEAR_PEF | UART_CLEAR_FEF | UART_CLEAR_NEF | UART_CLEAR_OREF);
 
 	// Disable unused peripheral clocks to reduce power consumption
 	__HAL_RCC_I2C1_CLK_DISABLE();
 	__HAL_RCC_USART1_CLK_DISABLE();
 	__HAL_RCC_DMA1_CLK_DISABLE();
 
-	// Ensure debug connection is disabled in Stop mode (if using SWD/JTAG)
-	DBGMCU->CR &= ~(DBGMCU_CR_DBG_STOP); // Disable debug in Stop mode
+	// Disable debug in Stop mode to save power
+	HAL_DBGMCU_DisableDBGStopMode();
+
+	// Suspend SysTick to prevent it from waking the MCU
+	HAL_SuspendTick();
 
 	// Enter Stop Mode with low power regulator
 	HAL_PWR_EnterSTOPMode(PWR_LOWPOWERREGULATOR_ON, PWR_STOPENTRY_WFI);
 
 	// When we wake up, execution continues here
+	HAL_ResumeTick();
 	SystemClock_Config();
 	exit_low_power_mode();
 }
@@ -176,22 +183,34 @@ void exit_low_power_mode(void)
     __HAL_RCC_GPIOC_CLK_ENABLE();
     __HAL_RCC_I2C1_CLK_ENABLE();
     __HAL_RCC_LPUART1_CLK_ENABLE();
+    __HAL_RCC_USART1_CLK_ENABLE();
     __HAL_RCC_DMA1_CLK_ENABLE();
     
-    // Reinitialize GPIOs (this will restore PB5 to its normal configuration)
+    // Reinitialize GPIOs and peripherals
     MX_GPIO_Init();
-    MX_DMA_Init();                              // I did this because it is in the same order as it was generated
+    MX_DMA_Init();
     MX_I2C1_Init();
     MX_LPUART1_UART_Init();
     MX_USART1_UART_Init();
     MX_RTC_Init();
-    ATC_Init(&lora, &hlpuart1, 512, "LoRaWAN"); // this SHOULD make the ATC serial commands workagain
-    ATC_Init(&dbg, &huart1, 512, "Debug");
-    ATC_SetEvents(&lora, events);               // Setup all async events again
+    
+    // Re-enable interrupts that were disabled
+    HAL_NVIC_EnableIRQ(EXTI0_1_IRQn);
+    HAL_NVIC_EnableIRQ(EXTI2_3_IRQn);
+    HAL_NVIC_EnableIRQ(EXTI4_15_IRQn);
+    HAL_NVIC_EnableIRQ(DMA1_Channel2_3_IRQn);
+    HAL_NVIC_EnableIRQ(DMA1_Channel4_5_6_7_IRQn);
+    HAL_NVIC_EnableIRQ(USART1_IRQn);
+    
+    // Exit low power mode for LoRa serial
+    LoRaSerial_ExitLowPower(&hLora);
+    
+    // Reinitialize ATC handle for compatibility
+    ATC_Init(&lora, &hlpuart1, 512, "LoRaWAN");
+    
     device_state = DEVICE_COLLECT_DATA;
 
-	Debug_Print("Waking UP!\r\n");
-
+    Debug_Print("Waking UP!\r\n");
 }
 
 /* USER CODE END 0 */
@@ -228,10 +247,11 @@ int main(void)
   MX_RTC_Init();
   MX_USART1_UART_Init();
   /* USER CODE BEGIN 2 */
-  // Initialize the ATC handle before using it
-  ATC_Init(&lora, &hlpuart1, 512, "LoRaWAN"); // Adjust buffer size as needed
-  ATC_Init(&dbg, &huart1, 512, "Debug");
-  ATC_SetEvents(&lora, events);
+  // Initialize the LoRaSerial driver
+  LoRaSerial_Init(&hLora, &hlpuart1, loraRxBuf, sizeof(loraRxBuf), LoraLineHandler);
+  
+  // Initialize the ATC handle for compatibility with existing code
+  ATC_Init(&lora, &hlpuart1, 512, "LoRaWAN");
 
   Debug_Print("RDY\r\n");
 
@@ -240,7 +260,6 @@ int main(void)
 
   /* Infinite loop */
   /* USER CODE BEGIN WHILE */
-  char* ATSEND_Result = NULL;
   uint32_t last_command_time = 0;
 
   Debug_Print("DeviceState=Sleep\r\n");
@@ -249,28 +268,33 @@ int main(void)
 
   while(1)
   {
-      ATC_Loop(&lora);
+      // Use LoRaSerial driver for sending commands instead of ATC
+      // ATC_Loop(&lora); // Commented out - we're using LoRaSerial now
 	  Debug_Print("loop!!!\r\n");
       HAL_Delay(100); // This makes it easier to debug, don't remove
       switch (device_state)
       {
       case LORAWAN_JOIN:
-//          if (HAL_GetTick() - last_command_time > 10000 && !joined)
-//          {
-//        	  // this always works
-//        	  ATC_SendReceive(&lora, "AT\r\n", 1000, &ATSEND_Result, 3000, 1, "OK"); // This wakes the LoRa Module, it can be anything, so AT is best
-//              ATC_SendReceive(&lora, "AT+JOIN\r\n", 1000, &ATSEND_Result, 3000, 1, "OK");
-//              last_command_time = HAL_GetTick();
-//          }
+          if (HAL_GetTick() - last_command_time > 10000 && !joined)
+          {
+        	  // Send JOIN command using LoRaSerial instead of ATC
+              Debug_Print("Sending JOIN command\r\n");
+        	  LoRaSerial_Send(&hLora, "AT\r\n"); // Wake the LoRa Module
+              HAL_Delay(100);
+              LoRaSerial_Send(&hLora, "AT+JOIN\r\n");
+              last_command_time = HAL_GetTick();
+          }
 	  break;
 	  case DEVICE_SLEEP:
 		  enter_low_power_mode();
 	  break;
 	  case DEVICE_COLLECT_DATA:
-//		  ATC_SendReceive(&dbg, "Sending data...\r\n", 1000, NULL, 3000, 1, "OK");
-//		  // what sucks is when the device sleeps, I loose debugger session, so i can't get a break point here after sleep!
-//		  ATC_SendReceive(&lora, "AT\r\n", 1000, &ATSEND_Result, 3000, 1, "OK");
-//		  ATC_SendReceive(&lora, "AT+SEND \"AA\"\r\n", 1000, &ATSEND_Result, 3000, 1, "OK");
+		  // Send data using LoRaSerial instead of ATC
+		  Debug_Print("Sending data...\r\n");
+		  LoRaSerial_Send(&hLora, "AT\r\n");
+          HAL_Delay(100);
+		  LoRaSerial_Send(&hLora, "AT+SEND \"AA\"\r\n");
+		  HAL_Delay(100);  // Wait for command to be processed
 		  device_state = DEVICE_SLEEP;
 	  break;
       }
@@ -298,7 +322,10 @@ void SystemClock_Config(void)
   /** Initializes the RCC Oscillators according to the specified parameters
   * in the RCC_OscInitTypeDef structure.
   */
-  RCC_OscInitStruct.OscillatorType = RCC_OSCILLATORTYPE_LSI|RCC_OSCILLATORTYPE_MSI;
+  RCC_OscInitStruct.OscillatorType = RCC_OSCILLATORTYPE_HSI|RCC_OSCILLATORTYPE_LSI
+                              |RCC_OSCILLATORTYPE_MSI;
+  RCC_OscInitStruct.HSIState = RCC_HSI_ON;
+  RCC_OscInitStruct.HSICalibrationValue = RCC_HSICALIBRATION_DEFAULT;
   RCC_OscInitStruct.LSIState = RCC_LSI_ON;
   RCC_OscInitStruct.MSIState = RCC_MSI_ON;
   RCC_OscInitStruct.MSICalibrationValue = 0;
@@ -325,13 +352,16 @@ void SystemClock_Config(void)
   PeriphClkInit.PeriphClockSelection = RCC_PERIPHCLK_USART1|RCC_PERIPHCLK_LPUART1
                               |RCC_PERIPHCLK_I2C1|RCC_PERIPHCLK_RTC;
   PeriphClkInit.Usart1ClockSelection = RCC_USART1CLKSOURCE_PCLK2;
-  PeriphClkInit.Lpuart1ClockSelection = RCC_LPUART1CLKSOURCE_PCLK1;
+  PeriphClkInit.Lpuart1ClockSelection = RCC_LPUART1CLKSOURCE_HSI;  // Use HSI for wake-up capability
   PeriphClkInit.I2c1ClockSelection = RCC_I2C1CLKSOURCE_PCLK1;
   PeriphClkInit.RTCClockSelection = RCC_RTCCLKSOURCE_LSI;
   if (HAL_RCCEx_PeriphCLKConfig(&PeriphClkInit) != HAL_OK)
   {
     Error_Handler();
   }
+  
+  // Ensure HSI remains active during STOP mode for LPUART wake-up
+  __HAL_RCC_WAKEUPSTOP_CLK_CONFIG(RCC_STOP_WAKEUPCLOCK_HSI);
 }
 
 /* USER CODE BEGIN 4 */
@@ -340,25 +370,15 @@ void HAL_RTC_AlarmAEventCallback(RTC_HandleTypeDef *hrtc)
   // RTC Alarm callback - system will wake up from STOP mode
   // No code needed here, just waking up is enough
   __NOP();
-
 }
 
-void HAL_UARTEx_RxEventCallback(UART_HandleTypeDef *huart, uint16_t Size)
+void HAL_RTCEx_WakeUpTimerEventCallback(RTC_HandleTypeDef *hrtc)
 {
-  if (huart->Instance == LPUART1)
-  {
-    ATC_IdleLineCallback(&lora, Size);
-  }
+  // RTC Wake-up Timer callback - system will wake up from STOP mode after 60 seconds
+  // This is the intended wake-up source
+  __NOP();
 }
 
-void HAL_UART_ErrorCallback(UART_HandleTypeDef *huart)
-{
-  if (huart->Instance == LPUART1)
-  {
-    // Handle UART errors
-    __HAL_UART_CLEAR_FLAG(huart, 0xFFFFFFFF);
-  }
-}
 /* USER CODE END 4 */
 
 /**

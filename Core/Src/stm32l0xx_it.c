@@ -204,5 +204,11 @@ void RNG_LPUART1_IRQHandler(void)
 }
 
 /* USER CODE BEGIN 1 */
+#include "lorawan/lorawan_serial.h"
+extern LoRaSerial_HandleTypeDef hLora;
 
+void HAL_UART_RxCpltCallback(UART_HandleTypeDef *huart)
+{
+    LoRaSerial_RxCpltCallback(&hLora, huart);
+}
 /* USER CODE END 1 */

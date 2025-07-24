@@ -10,6 +10,7 @@
 "./Core/Src/system_stm32l0xx.o"
 "./Core/Src/usart.o"
 "./Core/Src/lorawan/lorawan_config.o"
+"./Core/Src/lorawan/lorawan_serial.o"
 "./Core/Src/sensirion/sensirion.o"
 "./Core/Src/sensirion/sensirion_common.o"
 "./Core/Src/sensirion/sensirion_i2c.o"

@@ -5,13 +5,16 @@
 
 # Add inputs and outputs from these tool invocations to the build variables 
 C_SRCS += \
-../Core/Src/lorawan/lorawan_config.c 
+../Core/Src/lorawan/lorawan_config.c \
+../Core/Src/lorawan/lorawan_serial.c 
 
 OBJS += \
-./Core/Src/lorawan/lorawan_config.o 
+./Core/Src/lorawan/lorawan_config.o \
+./Core/Src/lorawan/lorawan_serial.o 
 
 C_DEPS += \
-./Core/Src/lorawan/lorawan_config.d 
+./Core/Src/lorawan/lorawan_config.d \
+./Core/Src/lorawan/lorawan_serial.d 
 
 
 # Each subdirectory must supply rules for building sources it contributes
@@ -21,7 +24,7 @@ Core/Src/lorawan/%.o Core/Src/lorawan/%.su Core/Src/lorawan/%.cyclo: ../Core/Src
 clean: clean-Core-2f-Src-2f-lorawan
 
 clean-Core-2f-Src-2f-lorawan:
-	-$(RM) ./Core/Src/lorawan/lorawan_config.cyclo ./Core/Src/lorawan/lorawan_config.d ./Core/Src/lorawan/lorawan_config.o ./Core/Src/lorawan/lorawan_config.su
+	-$(RM) ./Core/Src/lorawan/lorawan_config.cyclo ./Core/Src/lorawan/lorawan_config.d ./Core/Src/lorawan/lorawan_config.o ./Core/Src/lorawan/lorawan_config.su ./Core/Src/lorawan/lorawan_serial.cyclo ./Core/Src/lorawan/lorawan_serial.d ./Core/Src/lorawan/lorawan_serial.o ./Core/Src/lorawan/lorawan_serial.su
 
 .PHONY: clean-Core-2f-Src-2f-lorawan
 
