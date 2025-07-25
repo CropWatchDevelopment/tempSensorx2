@@ -95,6 +95,112 @@ void ConsolePrintf(const char *format, ...);
 
 /* Private user code ---------------------------------------------------------*/
 /* USER CODE BEGIN 0 */
+
+
+int ATC_SendReceive(ATC_HandleTypeDef *lora, const char *command, uint32_t command_len, char *response, uint32_t response_size, uint32_t timeout_ms, const char *expected_response)
+{
+    HAL_StatusTypeDef status;
+
+    if (lora == NULL || lora->huart == NULL || command == NULL || command_len == 0) {
+        return -1; // Invalid parameters
+    }
+
+    status = HAL_UART_Transmit(lora->huart, (uint8_t *)command, command_len, timeout_ms);
+    if (status != HAL_OK) {
+        return -2; // Communication error
+    }
+
+    if (response != NULL && response_size > 0) {
+        memset(response, 0, response_size);
+        status = HAL_UART_Receive(lora->huart, (uint8_t *)response, response_size - 1, timeout_ms);
+        if (status != HAL_OK) {
+            return -4; // Timeout or receive error
+        }
+        response[response_size - 1] = '\0';
+    }
+
+    if (expected_response != NULL && response != NULL) {
+        if (strstr(response, expected_response) == NULL) {
+            return -3; // Unexpected response
+        }
+    }
+
+    return 0; // Success
+}
+// Wrapper function to send data and get response
+LoRaWAN_Error_t send_data_and_get_response(ATC_HandleTypeDef *lora, const char *data, char *response, uint32_t response_size, uint32_t timeout_ms, const char *expected_response)
+{
+    if (lora == NULL || lora->huart == NULL || data == NULL || response == NULL || response_size == 0) {
+        return LORAWAN_ERROR_INVALID_PARAM;
+    }
+
+    int result = ATC_SendReceive(lora, data, strlen(data), response, response_size, timeout_ms, expected_response);
+
+    if (result == -1) {
+        return LORAWAN_ERROR_INVALID_PARAM;
+    } else if (result == -2) {
+        return LORAWAN_ERROR_COMMUNICATION;
+    } else if (result == -3) {
+        return LORAWAN_ERROR_UNEXPECTED_RESPONSE;
+    } else if (result == -4) {
+        return LORAWAN_ERROR_TIMEOUT;
+    }
+
+    return LORAWAN_ERROR_OK;
+}
+LoRaWAN_Error_t join_lora_network(ATC_HandleTypeDef *lora)
+{
+    char response[AT_RESPONSE_BUFFER_SIZE];
+    LoRaWAN_Error_t status;
+
+    status = send_data_and_get_response(lora, "AT+JOIN\r\n", response, AT_RESPONSE_BUFFER_SIZE, JOIN_TIMEOUT_MS, "OK");
+    if (status != LORAWAN_ERROR_OK) {
+        ConsolePrintf("Failed to send AT+JOIN: %d\r\n", status);
+        return status;
+    }
+
+    memset(response, 0, AT_RESPONSE_BUFFER_SIZE);
+    HAL_StatusTypeDef hal_status = HAL_UART_Receive(lora->huart, (uint8_t *)response, AT_RESPONSE_BUFFER_SIZE - 1, JOIN_TIMEOUT_MS);
+    if (hal_status != HAL_OK) {
+        ConsolePrintf("Failed to receive join response: %d\r\n", hal_status);
+        return LORAWAN_ERROR_TIMEOUT;
+    }
+    response[AT_RESPONSE_BUFFER_SIZE - 1] = '\0';
+
+    if (strstr(response, "JOINED") != NULL) {
+        ConsolePrintf("Network joined successfullyrr\r\n");
+        return LORAWAN_ERROR_OK;
+    } else if (strstr(response, "JOIN FAILED") != NULL) {
+        ConsolePrintf("Failed to join network\r\n");
+        return LORAWAN_ERROR_NOT_JOINED;
+    } else {
+        ConsolePrintf("Unexpected join response: %s\r\n", response);
+        return LORAWAN_ERROR_UNEXPECTED_RESPONSE;
+    }
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 void RTC_IRQHandler(void)
 {
     HAL_RTCEx_WakeUpTimerIRQHandler(&hrtc);
@@ -152,96 +258,6 @@ void Enter_Stop_Mode(void)
     /* Resume SysTick after waking up */
     HAL_ResumeTick();
     ConsolePrintf("Exited Stop mode\r\n");
-}
-
-
-
-
-// ATC_SendReceive function
-int ATC_SendReceive(ATC_HandleTypeDef *lora, const char *command, uint32_t command_len, char *response, uint32_t response_size, uint32_t timeout_ms, const char *expected_response)
-{
-    HAL_StatusTypeDef status;
-
-    if (lora == NULL || lora->huart == NULL || command == NULL || command_len == 0) {
-        return -1; // Invalid parameters
-    }
-
-    status = HAL_UART_Transmit(lora->huart, (uint8_t *)command, command_len, timeout_ms);
-    if (status != HAL_OK) {
-        return -2; // Communication error
-    }
-
-    if (response != NULL && response_size > 0) {
-        memset(response, 0, response_size);
-        status = HAL_UART_Receive(lora->huart, (uint8_t *)response, response_size - 1, timeout_ms);
-        if (status != HAL_OK) {
-            return -4; // Timeout or receive error
-        }
-        response[response_size - 1] = '\0';
-    }
-
-    if (expected_response != NULL && response != NULL) {
-        if (strstr(response, expected_response) == NULL) {
-            return -3; // Unexpected response
-        }
-    }
-
-    return 0; // Success
-}
-
-
-
-// Wrapper function to send data and get response
-LoRaWAN_Error_t send_data_and_get_response(ATC_HandleTypeDef *lora, const char *data, char *response, uint32_t response_size, uint32_t timeout_ms, const char *expected_response)
-{
-    if (lora == NULL || lora->huart == NULL || data == NULL || response == NULL || response_size == 0) {
-        return LORAWAN_ERROR_INVALID_PARAM;
-    }
-
-    int result = ATC_SendReceive(lora, data, strlen(data), response, response_size, timeout_ms, expected_response);
-
-    if (result == -1) {
-        return LORAWAN_ERROR_INVALID_PARAM;
-    } else if (result == -2) {
-        return LORAWAN_ERROR_COMMUNICATION;
-    } else if (result == -3) {
-        return LORAWAN_ERROR_UNEXPECTED_RESPONSE;
-    } else if (result == -4) {
-        return LORAWAN_ERROR_TIMEOUT;
-    }
-
-    return LORAWAN_ERROR_OK;
-}
-
-LoRaWAN_Error_t join_lora_network(ATC_HandleTypeDef *lora)
-{
-    char response[AT_RESPONSE_BUFFER_SIZE];
-    LoRaWAN_Error_t status;
-
-    status = send_data_and_get_response(lora, "AT+JOIN\r\n", response, AT_RESPONSE_BUFFER_SIZE, JOIN_TIMEOUT_MS, "OK");
-    if (status != LORAWAN_ERROR_OK) {
-        ConsolePrintf("Failed to send AT+JOIN: %d\r\n", status);
-        return status;
-    }
-
-    memset(response, 0, AT_RESPONSE_BUFFER_SIZE);
-    HAL_StatusTypeDef hal_status = HAL_UART_Receive(lora->huart, (uint8_t *)response, AT_RESPONSE_BUFFER_SIZE - 1, JOIN_TIMEOUT_MS);
-    if (hal_status != HAL_OK) {
-        ConsolePrintf("Failed to receive join response: %d\r\n", hal_status);
-        return LORAWAN_ERROR_TIMEOUT;
-    }
-    response[AT_RESPONSE_BUFFER_SIZE - 1] = '\0';
-
-    if (strstr(response, "JOINED") != NULL) {
-        ConsolePrintf("Network joined successfullyrr\r\n");
-        return LORAWAN_ERROR_OK;
-    } else if (strstr(response, "JOIN FAILED") != NULL) {
-        ConsolePrintf("Failed to join network\r\n");
-        return LORAWAN_ERROR_NOT_JOINED;
-    } else {
-        ConsolePrintf("Unexpected join response: %s\r\n", response);
-        return LORAWAN_ERROR_UNEXPECTED_RESPONSE;
-    }
 }
 /* USER CODE END 0 */
 

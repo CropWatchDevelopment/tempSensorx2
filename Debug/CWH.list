@@ -27,25 +27,25 @@ Idx Name          Size      VMA       LMA       File off  Algn
                   ALLOC
  11 .ARM.attributes 00000028  00000000  00000000  0000605c  2**0
                   CONTENTS, READONLY
- 12 .debug_info   0000dbfc  00000000  00000000  00006084  2**0
+ 12 .debug_info   0000dbfe  00000000  00000000  00006084  2**0
                   CONTENTS, READONLY, DEBUGGING, OCTETS
- 13 .debug_abbrev 00001fbb  00000000  00000000  00013c80  2**0
+ 13 .debug_abbrev 00001fd8  00000000  00000000  00013c82  2**0
                   CONTENTS, READONLY, DEBUGGING, OCTETS
- 14 .debug_aranges 00000ce0  00000000  00000000  00015c40  2**3
+ 14 .debug_aranges 00000ce0  00000000  00000000  00015c60  2**3
                   CONTENTS, READONLY, DEBUGGING, OCTETS
- 15 .debug_rnglists 00000a09  00000000  00000000  00016920  2**0
+ 15 .debug_rnglists 00000a09  00000000  00000000  00016940  2**0
                   CONTENTS, READONLY, DEBUGGING, OCTETS
- 16 .debug_macro  00015a74  00000000  00000000  00017329  2**0
+ 16 .debug_macro  00015a74  00000000  00000000  00017349  2**0
                   CONTENTS, READONLY, DEBUGGING, OCTETS
- 17 .debug_line   0000ff60  00000000  00000000  0002cd9d  2**0
+ 17 .debug_line   0000ff60  00000000  00000000  0002cdbd  2**0
                   CONTENTS, READONLY, DEBUGGING, OCTETS
- 18 .debug_str    00085e33  00000000  00000000  0003ccfd  2**0
+ 18 .debug_str    00085e33  00000000  00000000  0003cd1d  2**0
                   CONTENTS, READONLY, DEBUGGING, OCTETS
- 19 .comment      00000043  00000000  00000000  000c2b30  2**0
+ 19 .comment      00000043  00000000  00000000  000c2b50  2**0
                   CONTENTS, READONLY
- 20 .debug_frame  0000334c  00000000  00000000  000c2b74  2**2
+ 20 .debug_frame  0000334c  00000000  00000000  000c2b94  2**2
                   CONTENTS, READONLY, DEBUGGING, OCTETS
- 21 .debug_line_str 0000005e  00000000  00000000  000c5ec0  2**0
+ 21 .debug_line_str 0000005e  00000000  00000000  000c5ee0  2**0
                   CONTENTS, READONLY, DEBUGGING, OCTETS
 
 Disassembly of section .text:
@@ -526,577 +526,573 @@ Disassembly of section .text:
  8000464:	01010101 	.word	0x01010101
 	...
 
-08000470 <RTC_IRQHandler>:
-/* USER CODE END PFP */
-
+08000470 <ATC_SendReceive>:
 /* Private user code ---------------------------------------------------------*/
 /* USER CODE BEGIN 0 */
+
+
+int ATC_SendReceive(ATC_HandleTypeDef *lora, const char *command, uint32_t command_len, char *response, uint32_t response_size, uint32_t timeout_ms, const char *expected_response)
+{
+ 8000470:	b5b0      	push	{r4, r5, r7, lr}
+ 8000472:	b086      	sub	sp, #24
+ 8000474:	af00      	add	r7, sp, #0
+ 8000476:	60f8      	str	r0, [r7, #12]
+ 8000478:	60b9      	str	r1, [r7, #8]
+ 800047a:	607a      	str	r2, [r7, #4]
+ 800047c:	603b      	str	r3, [r7, #0]
+    HAL_StatusTypeDef status;
+
+    if (lora == NULL || lora->huart == NULL || command == NULL || command_len == 0) {
+ 800047e:	68fb      	ldr	r3, [r7, #12]
+ 8000480:	2b00      	cmp	r3, #0
+ 8000482:	d009      	beq.n	8000498 <ATC_SendReceive+0x28>
+ 8000484:	68fb      	ldr	r3, [r7, #12]
+ 8000486:	681b      	ldr	r3, [r3, #0]
+ 8000488:	2b00      	cmp	r3, #0
+ 800048a:	d005      	beq.n	8000498 <ATC_SendReceive+0x28>
+ 800048c:	68bb      	ldr	r3, [r7, #8]
+ 800048e:	2b00      	cmp	r3, #0
+ 8000490:	d002      	beq.n	8000498 <ATC_SendReceive+0x28>
+ 8000492:	687b      	ldr	r3, [r7, #4]
+ 8000494:	2b00      	cmp	r3, #0
+ 8000496:	d102      	bne.n	800049e <ATC_SendReceive+0x2e>
+        return -1; // Invalid parameters
+ 8000498:	2301      	movs	r3, #1
+ 800049a:	425b      	negs	r3, r3
+ 800049c:	e04b      	b.n	8000536 <ATC_SendReceive+0xc6>
+    }
+
+    status = HAL_UART_Transmit(lora->huart, (uint8_t *)command, command_len, timeout_ms);
+ 800049e:	68fb      	ldr	r3, [r7, #12]
+ 80004a0:	6818      	ldr	r0, [r3, #0]
+ 80004a2:	687b      	ldr	r3, [r7, #4]
+ 80004a4:	b29a      	uxth	r2, r3
+ 80004a6:	2517      	movs	r5, #23
+ 80004a8:	197c      	adds	r4, r7, r5
+ 80004aa:	6afb      	ldr	r3, [r7, #44]	@ 0x2c
+ 80004ac:	68b9      	ldr	r1, [r7, #8]
+ 80004ae:	f002 ff5b 	bl	8003368 <HAL_UART_Transmit>
+ 80004b2:	0003      	movs	r3, r0
+ 80004b4:	7023      	strb	r3, [r4, #0]
+    if (status != HAL_OK) {
+ 80004b6:	197b      	adds	r3, r7, r5
+ 80004b8:	781b      	ldrb	r3, [r3, #0]
+ 80004ba:	2b00      	cmp	r3, #0
+ 80004bc:	d002      	beq.n	80004c4 <ATC_SendReceive+0x54>
+        return -2; // Communication error
+ 80004be:	2302      	movs	r3, #2
+ 80004c0:	425b      	negs	r3, r3
+ 80004c2:	e038      	b.n	8000536 <ATC_SendReceive+0xc6>
+    }
+
+    if (response != NULL && response_size > 0) {
+ 80004c4:	683b      	ldr	r3, [r7, #0]
+ 80004c6:	2b00      	cmp	r3, #0
+ 80004c8:	d023      	beq.n	8000512 <ATC_SendReceive+0xa2>
+ 80004ca:	6abb      	ldr	r3, [r7, #40]	@ 0x28
+ 80004cc:	2b00      	cmp	r3, #0
+ 80004ce:	d020      	beq.n	8000512 <ATC_SendReceive+0xa2>
+        memset(response, 0, response_size);
+ 80004d0:	6aba      	ldr	r2, [r7, #40]	@ 0x28
+ 80004d2:	683b      	ldr	r3, [r7, #0]
+ 80004d4:	2100      	movs	r1, #0
+ 80004d6:	0018      	movs	r0, r3
+ 80004d8:	f003 fe0a 	bl	80040f0 <memset>
+        status = HAL_UART_Receive(lora->huart, (uint8_t *)response, response_size - 1, timeout_ms);
+ 80004dc:	68fb      	ldr	r3, [r7, #12]
+ 80004de:	6818      	ldr	r0, [r3, #0]
+ 80004e0:	6abb      	ldr	r3, [r7, #40]	@ 0x28
+ 80004e2:	b29b      	uxth	r3, r3
+ 80004e4:	3b01      	subs	r3, #1
+ 80004e6:	b29a      	uxth	r2, r3
+ 80004e8:	2517      	movs	r5, #23
+ 80004ea:	197c      	adds	r4, r7, r5
+ 80004ec:	6afb      	ldr	r3, [r7, #44]	@ 0x2c
+ 80004ee:	6839      	ldr	r1, [r7, #0]
+ 80004f0:	f002 ffda 	bl	80034a8 <HAL_UART_Receive>
+ 80004f4:	0003      	movs	r3, r0
+ 80004f6:	7023      	strb	r3, [r4, #0]
+        if (status != HAL_OK) {
+ 80004f8:	197b      	adds	r3, r7, r5
+ 80004fa:	781b      	ldrb	r3, [r3, #0]
+ 80004fc:	2b00      	cmp	r3, #0
+ 80004fe:	d002      	beq.n	8000506 <ATC_SendReceive+0x96>
+            return -4; // Timeout or receive error
+ 8000500:	2304      	movs	r3, #4
+ 8000502:	425b      	negs	r3, r3
+ 8000504:	e017      	b.n	8000536 <ATC_SendReceive+0xc6>
+        }
+        response[response_size - 1] = '\0';
+ 8000506:	6abb      	ldr	r3, [r7, #40]	@ 0x28
+ 8000508:	3b01      	subs	r3, #1
+ 800050a:	683a      	ldr	r2, [r7, #0]
+ 800050c:	18d3      	adds	r3, r2, r3
+ 800050e:	2200      	movs	r2, #0
+ 8000510:	701a      	strb	r2, [r3, #0]
+    }
+
+    if (expected_response != NULL && response != NULL) {
+ 8000512:	6b3b      	ldr	r3, [r7, #48]	@ 0x30
+ 8000514:	2b00      	cmp	r3, #0
+ 8000516:	d00d      	beq.n	8000534 <ATC_SendReceive+0xc4>
+ 8000518:	683b      	ldr	r3, [r7, #0]
+ 800051a:	2b00      	cmp	r3, #0
+ 800051c:	d00a      	beq.n	8000534 <ATC_SendReceive+0xc4>
+        if (strstr(response, expected_response) == NULL) {
+ 800051e:	6b3a      	ldr	r2, [r7, #48]	@ 0x30
+ 8000520:	683b      	ldr	r3, [r7, #0]
+ 8000522:	0011      	movs	r1, r2
+ 8000524:	0018      	movs	r0, r3
+ 8000526:	f003 fdeb 	bl	8004100 <strstr>
+ 800052a:	1e03      	subs	r3, r0, #0
+ 800052c:	d102      	bne.n	8000534 <ATC_SendReceive+0xc4>
+            return -3; // Unexpected response
+ 800052e:	2303      	movs	r3, #3
+ 8000530:	425b      	negs	r3, r3
+ 8000532:	e000      	b.n	8000536 <ATC_SendReceive+0xc6>
+        }
+    }
+
+    return 0; // Success
+ 8000534:	2300      	movs	r3, #0
+}
+ 8000536:	0018      	movs	r0, r3
+ 8000538:	46bd      	mov	sp, r7
+ 800053a:	b006      	add	sp, #24
+ 800053c:	bdb0      	pop	{r4, r5, r7, pc}
+
+0800053e <send_data_and_get_response>:
+// Wrapper function to send data and get response
+LoRaWAN_Error_t send_data_and_get_response(ATC_HandleTypeDef *lora, const char *data, char *response, uint32_t response_size, uint32_t timeout_ms, const char *expected_response)
+{
+ 800053e:	b590      	push	{r4, r7, lr}
+ 8000540:	b08b      	sub	sp, #44	@ 0x2c
+ 8000542:	af04      	add	r7, sp, #16
+ 8000544:	60f8      	str	r0, [r7, #12]
+ 8000546:	60b9      	str	r1, [r7, #8]
+ 8000548:	607a      	str	r2, [r7, #4]
+ 800054a:	603b      	str	r3, [r7, #0]
+    if (lora == NULL || lora->huart == NULL || data == NULL || response == NULL || response_size == 0) {
+ 800054c:	68fb      	ldr	r3, [r7, #12]
+ 800054e:	2b00      	cmp	r3, #0
+ 8000550:	d00c      	beq.n	800056c <send_data_and_get_response+0x2e>
+ 8000552:	68fb      	ldr	r3, [r7, #12]
+ 8000554:	681b      	ldr	r3, [r3, #0]
+ 8000556:	2b00      	cmp	r3, #0
+ 8000558:	d008      	beq.n	800056c <send_data_and_get_response+0x2e>
+ 800055a:	68bb      	ldr	r3, [r7, #8]
+ 800055c:	2b00      	cmp	r3, #0
+ 800055e:	d005      	beq.n	800056c <send_data_and_get_response+0x2e>
+ 8000560:	687b      	ldr	r3, [r7, #4]
+ 8000562:	2b00      	cmp	r3, #0
+ 8000564:	d002      	beq.n	800056c <send_data_and_get_response+0x2e>
+ 8000566:	683b      	ldr	r3, [r7, #0]
+ 8000568:	2b00      	cmp	r3, #0
+ 800056a:	d102      	bne.n	8000572 <send_data_and_get_response+0x34>
+        return LORAWAN_ERROR_INVALID_PARAM;
+ 800056c:	2301      	movs	r3, #1
+ 800056e:	425b      	negs	r3, r3
+ 8000570:	e02c      	b.n	80005cc <send_data_and_get_response+0x8e>
+    }
+
+    int result = ATC_SendReceive(lora, data, strlen(data), response, response_size, timeout_ms, expected_response);
+ 8000572:	68bb      	ldr	r3, [r7, #8]
+ 8000574:	0018      	movs	r0, r3
+ 8000576:	f7ff fdc7 	bl	8000108 <strlen>
+ 800057a:	0004      	movs	r4, r0
+ 800057c:	687a      	ldr	r2, [r7, #4]
+ 800057e:	68b9      	ldr	r1, [r7, #8]
+ 8000580:	68f8      	ldr	r0, [r7, #12]
+ 8000582:	6afb      	ldr	r3, [r7, #44]	@ 0x2c
+ 8000584:	9302      	str	r3, [sp, #8]
+ 8000586:	6abb      	ldr	r3, [r7, #40]	@ 0x28
+ 8000588:	9301      	str	r3, [sp, #4]
+ 800058a:	683b      	ldr	r3, [r7, #0]
+ 800058c:	9300      	str	r3, [sp, #0]
+ 800058e:	0013      	movs	r3, r2
+ 8000590:	0022      	movs	r2, r4
+ 8000592:	f7ff ff6d 	bl	8000470 <ATC_SendReceive>
+ 8000596:	0003      	movs	r3, r0
+ 8000598:	617b      	str	r3, [r7, #20]
+
+    if (result == -1) {
+ 800059a:	697b      	ldr	r3, [r7, #20]
+ 800059c:	3301      	adds	r3, #1
+ 800059e:	d102      	bne.n	80005a6 <send_data_and_get_response+0x68>
+        return LORAWAN_ERROR_INVALID_PARAM;
+ 80005a0:	2301      	movs	r3, #1
+ 80005a2:	425b      	negs	r3, r3
+ 80005a4:	e012      	b.n	80005cc <send_data_and_get_response+0x8e>
+    } else if (result == -2) {
+ 80005a6:	697b      	ldr	r3, [r7, #20]
+ 80005a8:	3302      	adds	r3, #2
+ 80005aa:	d102      	bne.n	80005b2 <send_data_and_get_response+0x74>
+        return LORAWAN_ERROR_COMMUNICATION;
+ 80005ac:	2302      	movs	r3, #2
+ 80005ae:	425b      	negs	r3, r3
+ 80005b0:	e00c      	b.n	80005cc <send_data_and_get_response+0x8e>
+    } else if (result == -3) {
+ 80005b2:	697b      	ldr	r3, [r7, #20]
+ 80005b4:	3303      	adds	r3, #3
+ 80005b6:	d102      	bne.n	80005be <send_data_and_get_response+0x80>
+        return LORAWAN_ERROR_UNEXPECTED_RESPONSE;
+ 80005b8:	2303      	movs	r3, #3
+ 80005ba:	425b      	negs	r3, r3
+ 80005bc:	e006      	b.n	80005cc <send_data_and_get_response+0x8e>
+    } else if (result == -4) {
+ 80005be:	697b      	ldr	r3, [r7, #20]
+ 80005c0:	3304      	adds	r3, #4
+ 80005c2:	d102      	bne.n	80005ca <send_data_and_get_response+0x8c>
+        return LORAWAN_ERROR_TIMEOUT;
+ 80005c4:	2304      	movs	r3, #4
+ 80005c6:	425b      	negs	r3, r3
+ 80005c8:	e000      	b.n	80005cc <send_data_and_get_response+0x8e>
+    }
+
+    return LORAWAN_ERROR_OK;
+ 80005ca:	2300      	movs	r3, #0
+}
+ 80005cc:	0018      	movs	r0, r3
+ 80005ce:	46bd      	mov	sp, r7
+ 80005d0:	b007      	add	sp, #28
+ 80005d2:	bd90      	pop	{r4, r7, pc}
+
+080005d4 <join_lora_network>:
+LoRaWAN_Error_t join_lora_network(ATC_HandleTypeDef *lora)
+{
+ 80005d4:	b5f0      	push	{r4, r5, r6, r7, lr}
+ 80005d6:	b0c7      	sub	sp, #284	@ 0x11c
+ 80005d8:	af02      	add	r7, sp, #8
+ 80005da:	6078      	str	r0, [r7, #4]
+    char response[AT_RESPONSE_BUFFER_SIZE];
+    LoRaWAN_Error_t status;
+
+    status = send_data_and_get_response(lora, "AT+JOIN\r\n", response, AT_RESPONSE_BUFFER_SIZE, JOIN_TIMEOUT_MS, "OK");
+ 80005dc:	2610      	movs	r6, #16
+ 80005de:	36ff      	adds	r6, #255	@ 0xff
+ 80005e0:	19bc      	adds	r4, r7, r6
+ 80005e2:	2380      	movs	r3, #128	@ 0x80
+ 80005e4:	005d      	lsls	r5, r3, #1
+ 80005e6:	230c      	movs	r3, #12
+ 80005e8:	18fa      	adds	r2, r7, r3
+ 80005ea:	4939      	ldr	r1, [pc, #228]	@ (80006d0 <join_lora_network+0xfc>)
+ 80005ec:	6878      	ldr	r0, [r7, #4]
+ 80005ee:	4b39      	ldr	r3, [pc, #228]	@ (80006d4 <join_lora_network+0x100>)
+ 80005f0:	9301      	str	r3, [sp, #4]
+ 80005f2:	4b39      	ldr	r3, [pc, #228]	@ (80006d8 <join_lora_network+0x104>)
+ 80005f4:	9300      	str	r3, [sp, #0]
+ 80005f6:	002b      	movs	r3, r5
+ 80005f8:	f7ff ffa1 	bl	800053e <send_data_and_get_response>
+ 80005fc:	0003      	movs	r3, r0
+ 80005fe:	7023      	strb	r3, [r4, #0]
+    if (status != LORAWAN_ERROR_OK) {
+ 8000600:	19bb      	adds	r3, r7, r6
+ 8000602:	781b      	ldrb	r3, [r3, #0]
+ 8000604:	b25b      	sxtb	r3, r3
+ 8000606:	2b00      	cmp	r3, #0
+ 8000608:	d00b      	beq.n	8000622 <join_lora_network+0x4e>
+        ConsolePrintf("Failed to send AT+JOIN: %d\r\n", status);
+ 800060a:	19bb      	adds	r3, r7, r6
+ 800060c:	2200      	movs	r2, #0
+ 800060e:	569a      	ldrsb	r2, [r3, r2]
+ 8000610:	4b32      	ldr	r3, [pc, #200]	@ (80006dc <join_lora_network+0x108>)
+ 8000612:	0011      	movs	r1, r2
+ 8000614:	0018      	movs	r0, r3
+ 8000616:	f000 fb1d 	bl	8000c54 <ConsolePrintf>
+        return status;
+ 800061a:	19bb      	adds	r3, r7, r6
+ 800061c:	781b      	ldrb	r3, [r3, #0]
+ 800061e:	b25b      	sxtb	r3, r3
+ 8000620:	e051      	b.n	80006c6 <join_lora_network+0xf2>
+    }
+
+    memset(response, 0, AT_RESPONSE_BUFFER_SIZE);
+ 8000622:	2380      	movs	r3, #128	@ 0x80
+ 8000624:	005a      	lsls	r2, r3, #1
+ 8000626:	260c      	movs	r6, #12
+ 8000628:	19bb      	adds	r3, r7, r6
+ 800062a:	2100      	movs	r1, #0
+ 800062c:	0018      	movs	r0, r3
+ 800062e:	f003 fd5f 	bl	80040f0 <memset>
+    HAL_StatusTypeDef hal_status = HAL_UART_Receive(lora->huart, (uint8_t *)response, AT_RESPONSE_BUFFER_SIZE - 1, JOIN_TIMEOUT_MS);
+ 8000632:	687b      	ldr	r3, [r7, #4]
+ 8000634:	6818      	ldr	r0, [r3, #0]
+ 8000636:	2587      	movs	r5, #135	@ 0x87
+ 8000638:	006d      	lsls	r5, r5, #1
+ 800063a:	197c      	adds	r4, r7, r5
+ 800063c:	4b26      	ldr	r3, [pc, #152]	@ (80006d8 <join_lora_network+0x104>)
+ 800063e:	19b9      	adds	r1, r7, r6
+ 8000640:	22ff      	movs	r2, #255	@ 0xff
+ 8000642:	f002 ff31 	bl	80034a8 <HAL_UART_Receive>
+ 8000646:	0003      	movs	r3, r0
+ 8000648:	7023      	strb	r3, [r4, #0]
+    if (hal_status != HAL_OK) {
+ 800064a:	197b      	adds	r3, r7, r5
+ 800064c:	781b      	ldrb	r3, [r3, #0]
+ 800064e:	2b00      	cmp	r3, #0
+ 8000650:	d009      	beq.n	8000666 <join_lora_network+0x92>
+        ConsolePrintf("Failed to receive join response: %d\r\n", hal_status);
+ 8000652:	197b      	adds	r3, r7, r5
+ 8000654:	781a      	ldrb	r2, [r3, #0]
+ 8000656:	4b22      	ldr	r3, [pc, #136]	@ (80006e0 <join_lora_network+0x10c>)
+ 8000658:	0011      	movs	r1, r2
+ 800065a:	0018      	movs	r0, r3
+ 800065c:	f000 fafa 	bl	8000c54 <ConsolePrintf>
+        return LORAWAN_ERROR_TIMEOUT;
+ 8000660:	2304      	movs	r3, #4
+ 8000662:	425b      	negs	r3, r3
+ 8000664:	e02f      	b.n	80006c6 <join_lora_network+0xf2>
+    }
+    response[AT_RESPONSE_BUFFER_SIZE - 1] = '\0';
+ 8000666:	4b1f      	ldr	r3, [pc, #124]	@ (80006e4 <join_lora_network+0x110>)
+ 8000668:	2288      	movs	r2, #136	@ 0x88
+ 800066a:	0052      	lsls	r2, r2, #1
+ 800066c:	189b      	adds	r3, r3, r2
+ 800066e:	19db      	adds	r3, r3, r7
+ 8000670:	22ff      	movs	r2, #255	@ 0xff
+ 8000672:	2100      	movs	r1, #0
+ 8000674:	5499      	strb	r1, [r3, r2]
+
+    if (strstr(response, "JOINED") != NULL) {
+ 8000676:	4a1c      	ldr	r2, [pc, #112]	@ (80006e8 <join_lora_network+0x114>)
+ 8000678:	230c      	movs	r3, #12
+ 800067a:	18fb      	adds	r3, r7, r3
+ 800067c:	0011      	movs	r1, r2
+ 800067e:	0018      	movs	r0, r3
+ 8000680:	f003 fd3e 	bl	8004100 <strstr>
+ 8000684:	1e03      	subs	r3, r0, #0
+ 8000686:	d005      	beq.n	8000694 <join_lora_network+0xc0>
+        ConsolePrintf("Network joined successfullyrr\r\n");
+ 8000688:	4b18      	ldr	r3, [pc, #96]	@ (80006ec <join_lora_network+0x118>)
+ 800068a:	0018      	movs	r0, r3
+ 800068c:	f000 fae2 	bl	8000c54 <ConsolePrintf>
+        return LORAWAN_ERROR_OK;
+ 8000690:	2300      	movs	r3, #0
+ 8000692:	e018      	b.n	80006c6 <join_lora_network+0xf2>
+    } else if (strstr(response, "JOIN FAILED") != NULL) {
+ 8000694:	4a16      	ldr	r2, [pc, #88]	@ (80006f0 <join_lora_network+0x11c>)
+ 8000696:	230c      	movs	r3, #12
+ 8000698:	18fb      	adds	r3, r7, r3
+ 800069a:	0011      	movs	r1, r2
+ 800069c:	0018      	movs	r0, r3
+ 800069e:	f003 fd2f 	bl	8004100 <strstr>
+ 80006a2:	1e03      	subs	r3, r0, #0
+ 80006a4:	d006      	beq.n	80006b4 <join_lora_network+0xe0>
+        ConsolePrintf("Failed to join network\r\n");
+ 80006a6:	4b13      	ldr	r3, [pc, #76]	@ (80006f4 <join_lora_network+0x120>)
+ 80006a8:	0018      	movs	r0, r3
+ 80006aa:	f000 fad3 	bl	8000c54 <ConsolePrintf>
+        return LORAWAN_ERROR_NOT_JOINED;
+ 80006ae:	2305      	movs	r3, #5
+ 80006b0:	425b      	negs	r3, r3
+ 80006b2:	e008      	b.n	80006c6 <join_lora_network+0xf2>
+    } else {
+        ConsolePrintf("Unexpected join response: %s\r\n", response);
+ 80006b4:	230c      	movs	r3, #12
+ 80006b6:	18fa      	adds	r2, r7, r3
+ 80006b8:	4b0f      	ldr	r3, [pc, #60]	@ (80006f8 <join_lora_network+0x124>)
+ 80006ba:	0011      	movs	r1, r2
+ 80006bc:	0018      	movs	r0, r3
+ 80006be:	f000 fac9 	bl	8000c54 <ConsolePrintf>
+        return LORAWAN_ERROR_UNEXPECTED_RESPONSE;
+ 80006c2:	2303      	movs	r3, #3
+ 80006c4:	425b      	negs	r3, r3
+    }
+}
+ 80006c6:	0018      	movs	r0, r3
+ 80006c8:	46bd      	mov	sp, r7
+ 80006ca:	b045      	add	sp, #276	@ 0x114
+ 80006cc:	bdf0      	pop	{r4, r5, r6, r7, pc}
+ 80006ce:	46c0      	nop			@ (mov r8, r8)
+ 80006d0:	08004a28 	.word	0x08004a28
+ 80006d4:	08004a34 	.word	0x08004a34
+ 80006d8:	00002710 	.word	0x00002710
+ 80006dc:	08004a38 	.word	0x08004a38
+ 80006e0:	08004a58 	.word	0x08004a58
+ 80006e4:	fffffefc 	.word	0xfffffefc
+ 80006e8:	08004a80 	.word	0x08004a80
+ 80006ec:	08004a88 	.word	0x08004a88
+ 80006f0:	08004aa8 	.word	0x08004aa8
+ 80006f4:	08004ab4 	.word	0x08004ab4
+ 80006f8:	08004ad0 	.word	0x08004ad0
+
+080006fc <RTC_IRQHandler>:
+
+
+
+
 void RTC_IRQHandler(void)
 {
- 8000470:	b580      	push	{r7, lr}
- 8000472:	af00      	add	r7, sp, #0
+ 80006fc:	b580      	push	{r7, lr}
+ 80006fe:	af00      	add	r7, sp, #0
     HAL_RTCEx_WakeUpTimerIRQHandler(&hrtc);
- 8000474:	4b03      	ldr	r3, [pc, #12]	@ (8000484 <RTC_IRQHandler+0x14>)
- 8000476:	0018      	movs	r0, r3
- 8000478:	f002 feb4 	bl	80031e4 <HAL_RTCEx_WakeUpTimerIRQHandler>
+ 8000700:	4b03      	ldr	r3, [pc, #12]	@ (8000710 <RTC_IRQHandler+0x14>)
+ 8000702:	0018      	movs	r0, r3
+ 8000704:	f002 fd6e 	bl	80031e4 <HAL_RTCEx_WakeUpTimerIRQHandler>
 }
- 800047c:	46c0      	nop			@ (mov r8, r8)
- 800047e:	46bd      	mov	sp, r7
- 8000480:	bd80      	pop	{r7, pc}
- 8000482:	46c0      	nop			@ (mov r8, r8)
- 8000484:	200001dc 	.word	0x200001dc
+ 8000708:	46c0      	nop			@ (mov r8, r8)
+ 800070a:	46bd      	mov	sp, r7
+ 800070c:	bd80      	pop	{r7, pc}
+ 800070e:	46c0      	nop			@ (mov r8, r8)
+ 8000710:	200001dc 	.word	0x200001dc
 
-08000488 <RTC_WakeUp_Init>:
+08000714 <RTC_WakeUp_Init>:
 
 void RTC_WakeUp_Init(void)
 {
- 8000488:	b580      	push	{r7, lr}
- 800048a:	af00      	add	r7, sp, #0
+ 8000714:	b580      	push	{r7, lr}
+ 8000716:	af00      	add	r7, sp, #0
 	ConsolePrintf("Starting RTC Wake-Up Timer configuration\r\n");
- 800048c:	4b15      	ldr	r3, [pc, #84]	@ (80004e4 <RTC_WakeUp_Init+0x5c>)
- 800048e:	0018      	movs	r0, r3
- 8000490:	f000 fbe0 	bl	8000c54 <ConsolePrintf>
+ 8000718:	4b15      	ldr	r3, [pc, #84]	@ (8000770 <RTC_WakeUp_Init+0x5c>)
+ 800071a:	0018      	movs	r0, r3
+ 800071c:	f000 fa9a 	bl	8000c54 <ConsolePrintf>
 
 	// Disable the Wake-Up Timer before configuring
 	HAL_RTCEx_DeactivateWakeUpTimer(&hrtc);
- 8000494:	4b14      	ldr	r3, [pc, #80]	@ (80004e8 <RTC_WakeUp_Init+0x60>)
- 8000496:	0018      	movs	r0, r3
- 8000498:	f002 fe40 	bl	800311c <HAL_RTCEx_DeactivateWakeUpTimer>
+ 8000720:	4b14      	ldr	r3, [pc, #80]	@ (8000774 <RTC_WakeUp_Init+0x60>)
+ 8000722:	0018      	movs	r0, r3
+ 8000724:	f002 fcfa 	bl	800311c <HAL_RTCEx_DeactivateWakeUpTimer>
 	ConsolePrintf("RTC Wake-Up Timer disabled\r\n");
- 800049c:	4b13      	ldr	r3, [pc, #76]	@ (80004ec <RTC_WakeUp_Init+0x64>)
- 800049e:	0018      	movs	r0, r3
- 80004a0:	f000 fbd8 	bl	8000c54 <ConsolePrintf>
+ 8000728:	4b13      	ldr	r3, [pc, #76]	@ (8000778 <RTC_WakeUp_Init+0x64>)
+ 800072a:	0018      	movs	r0, r3
+ 800072c:	f000 fa92 	bl	8000c54 <ConsolePrintf>
 
 	// Configure Wake-Up Timer for 60 seconds using LSI (~40 kHz)
 	// With AsynchPrediv = 127, SynchPrediv = 255: CK_SPRE = 40,000 / (128 * 256) = ~1.22 Hz
 	// For ~60 seconds: WakeUpCounter = (60 * 1.22) - 1 = ~72
 	if (HAL_RTCEx_SetWakeUpTimer_IT(&hrtc, 59, RTC_WAKEUPCLOCK_CK_SPRE_16BITS) != HAL_OK)
- 80004a4:	4b10      	ldr	r3, [pc, #64]	@ (80004e8 <RTC_WakeUp_Init+0x60>)
- 80004a6:	2204      	movs	r2, #4
- 80004a8:	213b      	movs	r1, #59	@ 0x3b
- 80004aa:	0018      	movs	r0, r3
- 80004ac:	f002 fd5e 	bl	8002f6c <HAL_RTCEx_SetWakeUpTimer_IT>
- 80004b0:	1e03      	subs	r3, r0, #0
- 80004b2:	d004      	beq.n	80004be <RTC_WakeUp_Init+0x36>
+ 8000730:	4b10      	ldr	r3, [pc, #64]	@ (8000774 <RTC_WakeUp_Init+0x60>)
+ 8000732:	2204      	movs	r2, #4
+ 8000734:	213b      	movs	r1, #59	@ 0x3b
+ 8000736:	0018      	movs	r0, r3
+ 8000738:	f002 fc18 	bl	8002f6c <HAL_RTCEx_SetWakeUpTimer_IT>
+ 800073c:	1e03      	subs	r3, r0, #0
+ 800073e:	d004      	beq.n	800074a <RTC_WakeUp_Init+0x36>
 	{
 		ConsolePrintf("RTC Wake-Up Timer Init Failed\r\n");
- 80004b4:	4b0e      	ldr	r3, [pc, #56]	@ (80004f0 <RTC_WakeUp_Init+0x68>)
- 80004b6:	0018      	movs	r0, r3
- 80004b8:	f000 fbcc 	bl	8000c54 <ConsolePrintf>
- 80004bc:	e003      	b.n	80004c6 <RTC_WakeUp_Init+0x3e>
+ 8000740:	4b0e      	ldr	r3, [pc, #56]	@ (800077c <RTC_WakeUp_Init+0x68>)
+ 8000742:	0018      	movs	r0, r3
+ 8000744:	f000 fa86 	bl	8000c54 <ConsolePrintf>
+ 8000748:	e003      	b.n	8000752 <RTC_WakeUp_Init+0x3e>
 
 	}
 	else
 	{
 		ConsolePrintf("RTC Wake-Up Timer Initialized for ~60 seconds\r\n");
- 80004be:	4b0d      	ldr	r3, [pc, #52]	@ (80004f4 <RTC_WakeUp_Init+0x6c>)
- 80004c0:	0018      	movs	r0, r3
- 80004c2:	f000 fbc7 	bl	8000c54 <ConsolePrintf>
+ 800074a:	4b0d      	ldr	r3, [pc, #52]	@ (8000780 <RTC_WakeUp_Init+0x6c>)
+ 800074c:	0018      	movs	r0, r3
+ 800074e:	f000 fa81 	bl	8000c54 <ConsolePrintf>
 	}
 
 	// Enable RTC Wake-Up interrupt in NVIC
 	HAL_NVIC_SetPriority(RTC_IRQn, 0, 0);
- 80004c6:	2200      	movs	r2, #0
- 80004c8:	2100      	movs	r1, #0
- 80004ca:	2002      	movs	r0, #2
- 80004cc:	f000 ff5e 	bl	800138c <HAL_NVIC_SetPriority>
+ 8000752:	2200      	movs	r2, #0
+ 8000754:	2100      	movs	r1, #0
+ 8000756:	2002      	movs	r0, #2
+ 8000758:	f000 fe18 	bl	800138c <HAL_NVIC_SetPriority>
 	HAL_NVIC_EnableIRQ(RTC_IRQn);
- 80004d0:	2002      	movs	r0, #2
- 80004d2:	f000 ff70 	bl	80013b6 <HAL_NVIC_EnableIRQ>
+ 800075c:	2002      	movs	r0, #2
+ 800075e:	f000 fe2a 	bl	80013b6 <HAL_NVIC_EnableIRQ>
 	ConsolePrintf("RTC Wake-Up interrupt enabled in NVIC\r\n");
- 80004d6:	4b08      	ldr	r3, [pc, #32]	@ (80004f8 <RTC_WakeUp_Init+0x70>)
- 80004d8:	0018      	movs	r0, r3
- 80004da:	f000 fbbb 	bl	8000c54 <ConsolePrintf>
+ 8000762:	4b08      	ldr	r3, [pc, #32]	@ (8000784 <RTC_WakeUp_Init+0x70>)
+ 8000764:	0018      	movs	r0, r3
+ 8000766:	f000 fa75 	bl	8000c54 <ConsolePrintf>
 }
- 80004de:	46c0      	nop			@ (mov r8, r8)
- 80004e0:	46bd      	mov	sp, r7
- 80004e2:	bd80      	pop	{r7, pc}
- 80004e4:	08004a28 	.word	0x08004a28
- 80004e8:	200001dc 	.word	0x200001dc
- 80004ec:	08004a54 	.word	0x08004a54
- 80004f0:	08004a74 	.word	0x08004a74
- 80004f4:	08004a94 	.word	0x08004a94
- 80004f8:	08004ac4 	.word	0x08004ac4
+ 800076a:	46c0      	nop			@ (mov r8, r8)
+ 800076c:	46bd      	mov	sp, r7
+ 800076e:	bd80      	pop	{r7, pc}
+ 8000770:	08004af0 	.word	0x08004af0
+ 8000774:	200001dc 	.word	0x200001dc
+ 8000778:	08004b1c 	.word	0x08004b1c
+ 800077c:	08004b3c 	.word	0x08004b3c
+ 8000780:	08004b5c 	.word	0x08004b5c
+ 8000784:	08004b8c 	.word	0x08004b8c
 
-080004fc <HAL_RTCEx_WakeUpTimerEventCallback>:
+08000788 <HAL_RTCEx_WakeUpTimerEventCallback>:
 
 void HAL_RTCEx_WakeUpTimerEventCallback(RTC_HandleTypeDef *hrtc)
 {
- 80004fc:	b580      	push	{r7, lr}
- 80004fe:	b082      	sub	sp, #8
- 8000500:	af00      	add	r7, sp, #0
- 8000502:	6078      	str	r0, [r7, #4]
+ 8000788:	b580      	push	{r7, lr}
+ 800078a:	b082      	sub	sp, #8
+ 800078c:	af00      	add	r7, sp, #0
+ 800078e:	6078      	str	r0, [r7, #4]
     // Reconfigure system clock after wake-up
     SystemClock_Config();
- 8000504:	f000 fa1c 	bl	8000940 <SystemClock_Config>
+ 8000790:	f000 f8d6 	bl	8000940 <SystemClock_Config>
 
     // Print message
     ConsolePrintf("Woke up at %s\r\n", "1-minute interval");
- 8000508:	4a04      	ldr	r2, [pc, #16]	@ (800051c <HAL_RTCEx_WakeUpTimerEventCallback+0x20>)
- 800050a:	4b05      	ldr	r3, [pc, #20]	@ (8000520 <HAL_RTCEx_WakeUpTimerEventCallback+0x24>)
- 800050c:	0011      	movs	r1, r2
- 800050e:	0018      	movs	r0, r3
- 8000510:	f000 fba0 	bl	8000c54 <ConsolePrintf>
+ 8000794:	4a04      	ldr	r2, [pc, #16]	@ (80007a8 <HAL_RTCEx_WakeUpTimerEventCallback+0x20>)
+ 8000796:	4b05      	ldr	r3, [pc, #20]	@ (80007ac <HAL_RTCEx_WakeUpTimerEventCallback+0x24>)
+ 8000798:	0011      	movs	r1, r2
+ 800079a:	0018      	movs	r0, r3
+ 800079c:	f000 fa5a 	bl	8000c54 <ConsolePrintf>
 }
- 8000514:	46c0      	nop			@ (mov r8, r8)
- 8000516:	46bd      	mov	sp, r7
- 8000518:	b002      	add	sp, #8
- 800051a:	bd80      	pop	{r7, pc}
- 800051c:	08004aec 	.word	0x08004aec
- 8000520:	08004b00 	.word	0x08004b00
+ 80007a0:	46c0      	nop			@ (mov r8, r8)
+ 80007a2:	46bd      	mov	sp, r7
+ 80007a4:	b002      	add	sp, #8
+ 80007a6:	bd80      	pop	{r7, pc}
+ 80007a8:	08004bb4 	.word	0x08004bb4
+ 80007ac:	08004bc8 	.word	0x08004bc8
 
-08000524 <Enter_Stop_Mode>:
+080007b0 <Enter_Stop_Mode>:
 
 void Enter_Stop_Mode(void)
 {
- 8000524:	b580      	push	{r7, lr}
- 8000526:	af00      	add	r7, sp, #0
+ 80007b0:	b580      	push	{r7, lr}
+ 80007b2:	af00      	add	r7, sp, #0
         ConsolePrintf("Preparing to enter Stop mode\r\n");
- 8000528:	4b12      	ldr	r3, [pc, #72]	@ (8000574 <Enter_Stop_Mode+0x50>)
- 800052a:	0018      	movs	r0, r3
- 800052c:	f000 fb92 	bl	8000c54 <ConsolePrintf>
+ 80007b4:	4b12      	ldr	r3, [pc, #72]	@ (8000800 <Enter_Stop_Mode+0x50>)
+ 80007b6:	0018      	movs	r0, r3
+ 80007b8:	f000 fa4c 	bl	8000c54 <ConsolePrintf>
 
     // Clear Wake-Up flag
     __HAL_RTC_WAKEUPTIMER_CLEAR_FLAG(&hrtc, RTC_FLAG_WUTF);
- 8000530:	4b11      	ldr	r3, [pc, #68]	@ (8000578 <Enter_Stop_Mode+0x54>)
- 8000532:	681b      	ldr	r3, [r3, #0]
- 8000534:	68db      	ldr	r3, [r3, #12]
- 8000536:	22ff      	movs	r2, #255	@ 0xff
- 8000538:	401a      	ands	r2, r3
- 800053a:	4b0f      	ldr	r3, [pc, #60]	@ (8000578 <Enter_Stop_Mode+0x54>)
- 800053c:	681b      	ldr	r3, [r3, #0]
- 800053e:	490f      	ldr	r1, [pc, #60]	@ (800057c <Enter_Stop_Mode+0x58>)
- 8000540:	430a      	orrs	r2, r1
- 8000542:	60da      	str	r2, [r3, #12]
+ 80007bc:	4b11      	ldr	r3, [pc, #68]	@ (8000804 <Enter_Stop_Mode+0x54>)
+ 80007be:	681b      	ldr	r3, [r3, #0]
+ 80007c0:	68db      	ldr	r3, [r3, #12]
+ 80007c2:	22ff      	movs	r2, #255	@ 0xff
+ 80007c4:	401a      	ands	r2, r3
+ 80007c6:	4b0f      	ldr	r3, [pc, #60]	@ (8000804 <Enter_Stop_Mode+0x54>)
+ 80007c8:	681b      	ldr	r3, [r3, #0]
+ 80007ca:	490f      	ldr	r1, [pc, #60]	@ (8000808 <Enter_Stop_Mode+0x58>)
+ 80007cc:	430a      	orrs	r2, r1
+ 80007ce:	60da      	str	r2, [r3, #12]
     ConsolePrintf("RTC Wake-Up flag cleared\r\n");
- 8000544:	4b0e      	ldr	r3, [pc, #56]	@ (8000580 <Enter_Stop_Mode+0x5c>)
- 8000546:	0018      	movs	r0, r3
- 8000548:	f000 fb84 	bl	8000c54 <ConsolePrintf>
+ 80007d0:	4b0e      	ldr	r3, [pc, #56]	@ (800080c <Enter_Stop_Mode+0x5c>)
+ 80007d2:	0018      	movs	r0, r3
+ 80007d4:	f000 fa3e 	bl	8000c54 <ConsolePrintf>
 
     // Enter Stop mode (low-power mode)
     ConsolePrintf("Entering Stop mode\r\n");
- 800054c:	4b0d      	ldr	r3, [pc, #52]	@ (8000584 <Enter_Stop_Mode+0x60>)
- 800054e:	0018      	movs	r0, r3
- 8000550:	f000 fb80 	bl	8000c54 <ConsolePrintf>
+ 80007d8:	4b0d      	ldr	r3, [pc, #52]	@ (8000810 <Enter_Stop_Mode+0x60>)
+ 80007da:	0018      	movs	r0, r3
+ 80007dc:	f000 fa3a 	bl	8000c54 <ConsolePrintf>
     /* Suspend SysTick to prevent it from waking up the MCU immediately */
     HAL_SuspendTick();
- 8000554:	f000 fe52 	bl	80011fc <HAL_SuspendTick>
+ 80007e0:	f000 fd0c 	bl	80011fc <HAL_SuspendTick>
     HAL_PWR_EnterSTOPMode(PWR_LOWPOWERREGULATOR_ON, PWR_STOPENTRY_WFI);
- 8000558:	2101      	movs	r1, #1
- 800055a:	2001      	movs	r0, #1
- 800055c:	f001 fb34 	bl	8001bc8 <HAL_PWR_EnterSTOPMode>
+ 80007e4:	2101      	movs	r1, #1
+ 80007e6:	2001      	movs	r0, #1
+ 80007e8:	f001 f9ee 	bl	8001bc8 <HAL_PWR_EnterSTOPMode>
     /* Resume SysTick after waking up */
     HAL_ResumeTick();
- 8000560:	f000 fe5a 	bl	8001218 <HAL_ResumeTick>
+ 80007ec:	f000 fd14 	bl	8001218 <HAL_ResumeTick>
     ConsolePrintf("Exited Stop mode\r\n");
- 8000564:	4b08      	ldr	r3, [pc, #32]	@ (8000588 <Enter_Stop_Mode+0x64>)
- 8000566:	0018      	movs	r0, r3
- 8000568:	f000 fb74 	bl	8000c54 <ConsolePrintf>
+ 80007f0:	4b08      	ldr	r3, [pc, #32]	@ (8000814 <Enter_Stop_Mode+0x64>)
+ 80007f2:	0018      	movs	r0, r3
+ 80007f4:	f000 fa2e 	bl	8000c54 <ConsolePrintf>
 }
- 800056c:	46c0      	nop			@ (mov r8, r8)
- 800056e:	46bd      	mov	sp, r7
- 8000570:	bd80      	pop	{r7, pc}
- 8000572:	46c0      	nop			@ (mov r8, r8)
- 8000574:	08004b10 	.word	0x08004b10
- 8000578:	200001dc 	.word	0x200001dc
- 800057c:	fffffb7f 	.word	0xfffffb7f
- 8000580:	08004b30 	.word	0x08004b30
- 8000584:	08004b4c 	.word	0x08004b4c
- 8000588:	08004b64 	.word	0x08004b64
-
-0800058c <ATC_SendReceive>:
-
-
-
-// ATC_SendReceive function
-int ATC_SendReceive(ATC_HandleTypeDef *lora, const char *command, uint32_t command_len, char *response, uint32_t response_size, uint32_t timeout_ms, const char *expected_response)
-{
- 800058c:	b5b0      	push	{r4, r5, r7, lr}
- 800058e:	b086      	sub	sp, #24
- 8000590:	af00      	add	r7, sp, #0
- 8000592:	60f8      	str	r0, [r7, #12]
- 8000594:	60b9      	str	r1, [r7, #8]
- 8000596:	607a      	str	r2, [r7, #4]
- 8000598:	603b      	str	r3, [r7, #0]
-    HAL_StatusTypeDef status;
-
-    if (lora == NULL || lora->huart == NULL || command == NULL || command_len == 0) {
- 800059a:	68fb      	ldr	r3, [r7, #12]
- 800059c:	2b00      	cmp	r3, #0
- 800059e:	d009      	beq.n	80005b4 <ATC_SendReceive+0x28>
- 80005a0:	68fb      	ldr	r3, [r7, #12]
- 80005a2:	681b      	ldr	r3, [r3, #0]
- 80005a4:	2b00      	cmp	r3, #0
- 80005a6:	d005      	beq.n	80005b4 <ATC_SendReceive+0x28>
- 80005a8:	68bb      	ldr	r3, [r7, #8]
- 80005aa:	2b00      	cmp	r3, #0
- 80005ac:	d002      	beq.n	80005b4 <ATC_SendReceive+0x28>
- 80005ae:	687b      	ldr	r3, [r7, #4]
- 80005b0:	2b00      	cmp	r3, #0
- 80005b2:	d102      	bne.n	80005ba <ATC_SendReceive+0x2e>
-        return -1; // Invalid parameters
- 80005b4:	2301      	movs	r3, #1
- 80005b6:	425b      	negs	r3, r3
- 80005b8:	e04b      	b.n	8000652 <ATC_SendReceive+0xc6>
-    }
-
-    status = HAL_UART_Transmit(lora->huart, (uint8_t *)command, command_len, timeout_ms);
- 80005ba:	68fb      	ldr	r3, [r7, #12]
- 80005bc:	6818      	ldr	r0, [r3, #0]
- 80005be:	687b      	ldr	r3, [r7, #4]
- 80005c0:	b29a      	uxth	r2, r3
- 80005c2:	2517      	movs	r5, #23
- 80005c4:	197c      	adds	r4, r7, r5
- 80005c6:	6afb      	ldr	r3, [r7, #44]	@ 0x2c
- 80005c8:	68b9      	ldr	r1, [r7, #8]
- 80005ca:	f002 fecd 	bl	8003368 <HAL_UART_Transmit>
- 80005ce:	0003      	movs	r3, r0
- 80005d0:	7023      	strb	r3, [r4, #0]
-    if (status != HAL_OK) {
- 80005d2:	197b      	adds	r3, r7, r5
- 80005d4:	781b      	ldrb	r3, [r3, #0]
- 80005d6:	2b00      	cmp	r3, #0
- 80005d8:	d002      	beq.n	80005e0 <ATC_SendReceive+0x54>
-        return -2; // Communication error
- 80005da:	2302      	movs	r3, #2
- 80005dc:	425b      	negs	r3, r3
- 80005de:	e038      	b.n	8000652 <ATC_SendReceive+0xc6>
-    }
-
-    if (response != NULL && response_size > 0) {
- 80005e0:	683b      	ldr	r3, [r7, #0]
- 80005e2:	2b00      	cmp	r3, #0
- 80005e4:	d023      	beq.n	800062e <ATC_SendReceive+0xa2>
- 80005e6:	6abb      	ldr	r3, [r7, #40]	@ 0x28
- 80005e8:	2b00      	cmp	r3, #0
- 80005ea:	d020      	beq.n	800062e <ATC_SendReceive+0xa2>
-        memset(response, 0, response_size);
- 80005ec:	6aba      	ldr	r2, [r7, #40]	@ 0x28
- 80005ee:	683b      	ldr	r3, [r7, #0]
- 80005f0:	2100      	movs	r1, #0
- 80005f2:	0018      	movs	r0, r3
- 80005f4:	f003 fd7c 	bl	80040f0 <memset>
-        status = HAL_UART_Receive(lora->huart, (uint8_t *)response, response_size - 1, timeout_ms);
- 80005f8:	68fb      	ldr	r3, [r7, #12]
- 80005fa:	6818      	ldr	r0, [r3, #0]
- 80005fc:	6abb      	ldr	r3, [r7, #40]	@ 0x28
- 80005fe:	b29b      	uxth	r3, r3
- 8000600:	3b01      	subs	r3, #1
- 8000602:	b29a      	uxth	r2, r3
- 8000604:	2517      	movs	r5, #23
- 8000606:	197c      	adds	r4, r7, r5
- 8000608:	6afb      	ldr	r3, [r7, #44]	@ 0x2c
- 800060a:	6839      	ldr	r1, [r7, #0]
- 800060c:	f002 ff4c 	bl	80034a8 <HAL_UART_Receive>
- 8000610:	0003      	movs	r3, r0
- 8000612:	7023      	strb	r3, [r4, #0]
-        if (status != HAL_OK) {
- 8000614:	197b      	adds	r3, r7, r5
- 8000616:	781b      	ldrb	r3, [r3, #0]
- 8000618:	2b00      	cmp	r3, #0
- 800061a:	d002      	beq.n	8000622 <ATC_SendReceive+0x96>
-            return -4; // Timeout or receive error
- 800061c:	2304      	movs	r3, #4
- 800061e:	425b      	negs	r3, r3
- 8000620:	e017      	b.n	8000652 <ATC_SendReceive+0xc6>
-        }
-        response[response_size - 1] = '\0';
- 8000622:	6abb      	ldr	r3, [r7, #40]	@ 0x28
- 8000624:	3b01      	subs	r3, #1
- 8000626:	683a      	ldr	r2, [r7, #0]
- 8000628:	18d3      	adds	r3, r2, r3
- 800062a:	2200      	movs	r2, #0
- 800062c:	701a      	strb	r2, [r3, #0]
-    }
-
-    if (expected_response != NULL && response != NULL) {
- 800062e:	6b3b      	ldr	r3, [r7, #48]	@ 0x30
- 8000630:	2b00      	cmp	r3, #0
- 8000632:	d00d      	beq.n	8000650 <ATC_SendReceive+0xc4>
- 8000634:	683b      	ldr	r3, [r7, #0]
- 8000636:	2b00      	cmp	r3, #0
- 8000638:	d00a      	beq.n	8000650 <ATC_SendReceive+0xc4>
-        if (strstr(response, expected_response) == NULL) {
- 800063a:	6b3a      	ldr	r2, [r7, #48]	@ 0x30
- 800063c:	683b      	ldr	r3, [r7, #0]
- 800063e:	0011      	movs	r1, r2
- 8000640:	0018      	movs	r0, r3
- 8000642:	f003 fd5d 	bl	8004100 <strstr>
- 8000646:	1e03      	subs	r3, r0, #0
- 8000648:	d102      	bne.n	8000650 <ATC_SendReceive+0xc4>
-            return -3; // Unexpected response
- 800064a:	2303      	movs	r3, #3
- 800064c:	425b      	negs	r3, r3
- 800064e:	e000      	b.n	8000652 <ATC_SendReceive+0xc6>
-        }
-    }
-
-    return 0; // Success
- 8000650:	2300      	movs	r3, #0
-}
- 8000652:	0018      	movs	r0, r3
- 8000654:	46bd      	mov	sp, r7
- 8000656:	b006      	add	sp, #24
- 8000658:	bdb0      	pop	{r4, r5, r7, pc}
-
-0800065a <send_data_and_get_response>:
-
-
-
-// Wrapper function to send data and get response
-LoRaWAN_Error_t send_data_and_get_response(ATC_HandleTypeDef *lora, const char *data, char *response, uint32_t response_size, uint32_t timeout_ms, const char *expected_response)
-{
- 800065a:	b590      	push	{r4, r7, lr}
- 800065c:	b08b      	sub	sp, #44	@ 0x2c
- 800065e:	af04      	add	r7, sp, #16
- 8000660:	60f8      	str	r0, [r7, #12]
- 8000662:	60b9      	str	r1, [r7, #8]
- 8000664:	607a      	str	r2, [r7, #4]
- 8000666:	603b      	str	r3, [r7, #0]
-    if (lora == NULL || lora->huart == NULL || data == NULL || response == NULL || response_size == 0) {
- 8000668:	68fb      	ldr	r3, [r7, #12]
- 800066a:	2b00      	cmp	r3, #0
- 800066c:	d00c      	beq.n	8000688 <send_data_and_get_response+0x2e>
- 800066e:	68fb      	ldr	r3, [r7, #12]
- 8000670:	681b      	ldr	r3, [r3, #0]
- 8000672:	2b00      	cmp	r3, #0
- 8000674:	d008      	beq.n	8000688 <send_data_and_get_response+0x2e>
- 8000676:	68bb      	ldr	r3, [r7, #8]
- 8000678:	2b00      	cmp	r3, #0
- 800067a:	d005      	beq.n	8000688 <send_data_and_get_response+0x2e>
- 800067c:	687b      	ldr	r3, [r7, #4]
- 800067e:	2b00      	cmp	r3, #0
- 8000680:	d002      	beq.n	8000688 <send_data_and_get_response+0x2e>
- 8000682:	683b      	ldr	r3, [r7, #0]
- 8000684:	2b00      	cmp	r3, #0
- 8000686:	d102      	bne.n	800068e <send_data_and_get_response+0x34>
-        return LORAWAN_ERROR_INVALID_PARAM;
- 8000688:	2301      	movs	r3, #1
- 800068a:	425b      	negs	r3, r3
- 800068c:	e02c      	b.n	80006e8 <send_data_and_get_response+0x8e>
-    }
-
-    int result = ATC_SendReceive(lora, data, strlen(data), response, response_size, timeout_ms, expected_response);
- 800068e:	68bb      	ldr	r3, [r7, #8]
- 8000690:	0018      	movs	r0, r3
- 8000692:	f7ff fd39 	bl	8000108 <strlen>
- 8000696:	0004      	movs	r4, r0
- 8000698:	687a      	ldr	r2, [r7, #4]
- 800069a:	68b9      	ldr	r1, [r7, #8]
- 800069c:	68f8      	ldr	r0, [r7, #12]
- 800069e:	6afb      	ldr	r3, [r7, #44]	@ 0x2c
- 80006a0:	9302      	str	r3, [sp, #8]
- 80006a2:	6abb      	ldr	r3, [r7, #40]	@ 0x28
- 80006a4:	9301      	str	r3, [sp, #4]
- 80006a6:	683b      	ldr	r3, [r7, #0]
- 80006a8:	9300      	str	r3, [sp, #0]
- 80006aa:	0013      	movs	r3, r2
- 80006ac:	0022      	movs	r2, r4
- 80006ae:	f7ff ff6d 	bl	800058c <ATC_SendReceive>
- 80006b2:	0003      	movs	r3, r0
- 80006b4:	617b      	str	r3, [r7, #20]
-
-    if (result == -1) {
- 80006b6:	697b      	ldr	r3, [r7, #20]
- 80006b8:	3301      	adds	r3, #1
- 80006ba:	d102      	bne.n	80006c2 <send_data_and_get_response+0x68>
-        return LORAWAN_ERROR_INVALID_PARAM;
- 80006bc:	2301      	movs	r3, #1
- 80006be:	425b      	negs	r3, r3
- 80006c0:	e012      	b.n	80006e8 <send_data_and_get_response+0x8e>
-    } else if (result == -2) {
- 80006c2:	697b      	ldr	r3, [r7, #20]
- 80006c4:	3302      	adds	r3, #2
- 80006c6:	d102      	bne.n	80006ce <send_data_and_get_response+0x74>
-        return LORAWAN_ERROR_COMMUNICATION;
- 80006c8:	2302      	movs	r3, #2
- 80006ca:	425b      	negs	r3, r3
- 80006cc:	e00c      	b.n	80006e8 <send_data_and_get_response+0x8e>
-    } else if (result == -3) {
- 80006ce:	697b      	ldr	r3, [r7, #20]
- 80006d0:	3303      	adds	r3, #3
- 80006d2:	d102      	bne.n	80006da <send_data_and_get_response+0x80>
-        return LORAWAN_ERROR_UNEXPECTED_RESPONSE;
- 80006d4:	2303      	movs	r3, #3
- 80006d6:	425b      	negs	r3, r3
- 80006d8:	e006      	b.n	80006e8 <send_data_and_get_response+0x8e>
-    } else if (result == -4) {
- 80006da:	697b      	ldr	r3, [r7, #20]
- 80006dc:	3304      	adds	r3, #4
- 80006de:	d102      	bne.n	80006e6 <send_data_and_get_response+0x8c>
-        return LORAWAN_ERROR_TIMEOUT;
- 80006e0:	2304      	movs	r3, #4
- 80006e2:	425b      	negs	r3, r3
- 80006e4:	e000      	b.n	80006e8 <send_data_and_get_response+0x8e>
-    }
-
-    return LORAWAN_ERROR_OK;
- 80006e6:	2300      	movs	r3, #0
-}
- 80006e8:	0018      	movs	r0, r3
- 80006ea:	46bd      	mov	sp, r7
- 80006ec:	b007      	add	sp, #28
- 80006ee:	bd90      	pop	{r4, r7, pc}
-
-080006f0 <join_lora_network>:
-
-LoRaWAN_Error_t join_lora_network(ATC_HandleTypeDef *lora)
-{
- 80006f0:	b5f0      	push	{r4, r5, r6, r7, lr}
- 80006f2:	b0c7      	sub	sp, #284	@ 0x11c
- 80006f4:	af02      	add	r7, sp, #8
- 80006f6:	6078      	str	r0, [r7, #4]
-    char response[AT_RESPONSE_BUFFER_SIZE];
-    LoRaWAN_Error_t status;
-
-    status = send_data_and_get_response(lora, "AT+JOIN\r\n", response, AT_RESPONSE_BUFFER_SIZE, JOIN_TIMEOUT_MS, "OK");
- 80006f8:	2610      	movs	r6, #16
- 80006fa:	36ff      	adds	r6, #255	@ 0xff
- 80006fc:	19bc      	adds	r4, r7, r6
- 80006fe:	2380      	movs	r3, #128	@ 0x80
- 8000700:	005d      	lsls	r5, r3, #1
- 8000702:	230c      	movs	r3, #12
- 8000704:	18fa      	adds	r2, r7, r3
- 8000706:	4939      	ldr	r1, [pc, #228]	@ (80007ec <join_lora_network+0xfc>)
- 8000708:	6878      	ldr	r0, [r7, #4]
- 800070a:	4b39      	ldr	r3, [pc, #228]	@ (80007f0 <join_lora_network+0x100>)
- 800070c:	9301      	str	r3, [sp, #4]
- 800070e:	4b39      	ldr	r3, [pc, #228]	@ (80007f4 <join_lora_network+0x104>)
- 8000710:	9300      	str	r3, [sp, #0]
- 8000712:	002b      	movs	r3, r5
- 8000714:	f7ff ffa1 	bl	800065a <send_data_and_get_response>
- 8000718:	0003      	movs	r3, r0
- 800071a:	7023      	strb	r3, [r4, #0]
-    if (status != LORAWAN_ERROR_OK) {
- 800071c:	19bb      	adds	r3, r7, r6
- 800071e:	781b      	ldrb	r3, [r3, #0]
- 8000720:	b25b      	sxtb	r3, r3
- 8000722:	2b00      	cmp	r3, #0
- 8000724:	d00b      	beq.n	800073e <join_lora_network+0x4e>
-        ConsolePrintf("Failed to send AT+JOIN: %d\r\n", status);
- 8000726:	19bb      	adds	r3, r7, r6
- 8000728:	2200      	movs	r2, #0
- 800072a:	569a      	ldrsb	r2, [r3, r2]
- 800072c:	4b32      	ldr	r3, [pc, #200]	@ (80007f8 <join_lora_network+0x108>)
- 800072e:	0011      	movs	r1, r2
- 8000730:	0018      	movs	r0, r3
- 8000732:	f000 fa8f 	bl	8000c54 <ConsolePrintf>
-        return status;
- 8000736:	19bb      	adds	r3, r7, r6
- 8000738:	781b      	ldrb	r3, [r3, #0]
- 800073a:	b25b      	sxtb	r3, r3
- 800073c:	e051      	b.n	80007e2 <join_lora_network+0xf2>
-    }
-
-    memset(response, 0, AT_RESPONSE_BUFFER_SIZE);
- 800073e:	2380      	movs	r3, #128	@ 0x80
- 8000740:	005a      	lsls	r2, r3, #1
- 8000742:	260c      	movs	r6, #12
- 8000744:	19bb      	adds	r3, r7, r6
- 8000746:	2100      	movs	r1, #0
- 8000748:	0018      	movs	r0, r3
- 800074a:	f003 fcd1 	bl	80040f0 <memset>
-    HAL_StatusTypeDef hal_status = HAL_UART_Receive(lora->huart, (uint8_t *)response, AT_RESPONSE_BUFFER_SIZE - 1, JOIN_TIMEOUT_MS);
- 800074e:	687b      	ldr	r3, [r7, #4]
- 8000750:	6818      	ldr	r0, [r3, #0]
- 8000752:	2587      	movs	r5, #135	@ 0x87
- 8000754:	006d      	lsls	r5, r5, #1
- 8000756:	197c      	adds	r4, r7, r5
- 8000758:	4b26      	ldr	r3, [pc, #152]	@ (80007f4 <join_lora_network+0x104>)
- 800075a:	19b9      	adds	r1, r7, r6
- 800075c:	22ff      	movs	r2, #255	@ 0xff
- 800075e:	f002 fea3 	bl	80034a8 <HAL_UART_Receive>
- 8000762:	0003      	movs	r3, r0
- 8000764:	7023      	strb	r3, [r4, #0]
-    if (hal_status != HAL_OK) {
- 8000766:	197b      	adds	r3, r7, r5
- 8000768:	781b      	ldrb	r3, [r3, #0]
- 800076a:	2b00      	cmp	r3, #0
- 800076c:	d009      	beq.n	8000782 <join_lora_network+0x92>
-        ConsolePrintf("Failed to receive join response: %d\r\n", hal_status);
- 800076e:	197b      	adds	r3, r7, r5
- 8000770:	781a      	ldrb	r2, [r3, #0]
- 8000772:	4b22      	ldr	r3, [pc, #136]	@ (80007fc <join_lora_network+0x10c>)
- 8000774:	0011      	movs	r1, r2
- 8000776:	0018      	movs	r0, r3
- 8000778:	f000 fa6c 	bl	8000c54 <ConsolePrintf>
-        return LORAWAN_ERROR_TIMEOUT;
- 800077c:	2304      	movs	r3, #4
- 800077e:	425b      	negs	r3, r3
- 8000780:	e02f      	b.n	80007e2 <join_lora_network+0xf2>
-    }
-    response[AT_RESPONSE_BUFFER_SIZE - 1] = '\0';
- 8000782:	4b1f      	ldr	r3, [pc, #124]	@ (8000800 <join_lora_network+0x110>)
- 8000784:	2288      	movs	r2, #136	@ 0x88
- 8000786:	0052      	lsls	r2, r2, #1
- 8000788:	189b      	adds	r3, r3, r2
- 800078a:	19db      	adds	r3, r3, r7
- 800078c:	22ff      	movs	r2, #255	@ 0xff
- 800078e:	2100      	movs	r1, #0
- 8000790:	5499      	strb	r1, [r3, r2]
-
-    if (strstr(response, "JOINED") != NULL) {
- 8000792:	4a1c      	ldr	r2, [pc, #112]	@ (8000804 <join_lora_network+0x114>)
- 8000794:	230c      	movs	r3, #12
- 8000796:	18fb      	adds	r3, r7, r3
- 8000798:	0011      	movs	r1, r2
- 800079a:	0018      	movs	r0, r3
- 800079c:	f003 fcb0 	bl	8004100 <strstr>
- 80007a0:	1e03      	subs	r3, r0, #0
- 80007a2:	d005      	beq.n	80007b0 <join_lora_network+0xc0>
-        ConsolePrintf("Network joined successfullyrr\r\n");
- 80007a4:	4b18      	ldr	r3, [pc, #96]	@ (8000808 <join_lora_network+0x118>)
- 80007a6:	0018      	movs	r0, r3
- 80007a8:	f000 fa54 	bl	8000c54 <ConsolePrintf>
-        return LORAWAN_ERROR_OK;
- 80007ac:	2300      	movs	r3, #0
- 80007ae:	e018      	b.n	80007e2 <join_lora_network+0xf2>
-    } else if (strstr(response, "JOIN FAILED") != NULL) {
- 80007b0:	4a16      	ldr	r2, [pc, #88]	@ (800080c <join_lora_network+0x11c>)
- 80007b2:	230c      	movs	r3, #12
- 80007b4:	18fb      	adds	r3, r7, r3
- 80007b6:	0011      	movs	r1, r2
- 80007b8:	0018      	movs	r0, r3
- 80007ba:	f003 fca1 	bl	8004100 <strstr>
- 80007be:	1e03      	subs	r3, r0, #0
- 80007c0:	d006      	beq.n	80007d0 <join_lora_network+0xe0>
-        ConsolePrintf("Failed to join network\r\n");
- 80007c2:	4b13      	ldr	r3, [pc, #76]	@ (8000810 <join_lora_network+0x120>)
- 80007c4:	0018      	movs	r0, r3
- 80007c6:	f000 fa45 	bl	8000c54 <ConsolePrintf>
-        return LORAWAN_ERROR_NOT_JOINED;
- 80007ca:	2305      	movs	r3, #5
- 80007cc:	425b      	negs	r3, r3
- 80007ce:	e008      	b.n	80007e2 <join_lora_network+0xf2>
-    } else {
-        ConsolePrintf("Unexpected join response: %s\r\n", response);
- 80007d0:	230c      	movs	r3, #12
- 80007d2:	18fa      	adds	r2, r7, r3
- 80007d4:	4b0f      	ldr	r3, [pc, #60]	@ (8000814 <join_lora_network+0x124>)
- 80007d6:	0011      	movs	r1, r2
- 80007d8:	0018      	movs	r0, r3
- 80007da:	f000 fa3b 	bl	8000c54 <ConsolePrintf>
-        return LORAWAN_ERROR_UNEXPECTED_RESPONSE;
- 80007de:	2303      	movs	r3, #3
- 80007e0:	425b      	negs	r3, r3
-    }
-}
- 80007e2:	0018      	movs	r0, r3
- 80007e4:	46bd      	mov	sp, r7
- 80007e6:	b045      	add	sp, #276	@ 0x114
- 80007e8:	bdf0      	pop	{r4, r5, r6, r7, pc}
- 80007ea:	46c0      	nop			@ (mov r8, r8)
- 80007ec:	08004b78 	.word	0x08004b78
- 80007f0:	08004b84 	.word	0x08004b84
- 80007f4:	00002710 	.word	0x00002710
- 80007f8:	08004b88 	.word	0x08004b88
- 80007fc:	08004ba8 	.word	0x08004ba8
- 8000800:	fffffefc 	.word	0xfffffefc
- 8000804:	08004bd0 	.word	0x08004bd0
- 8000808:	08004bd8 	.word	0x08004bd8
+ 80007f8:	46c0      	nop			@ (mov r8, r8)
+ 80007fa:	46bd      	mov	sp, r7
+ 80007fc:	bd80      	pop	{r7, pc}
+ 80007fe:	46c0      	nop			@ (mov r8, r8)
+ 8000800:	08004bd8 	.word	0x08004bd8
+ 8000804:	200001dc 	.word	0x200001dc
+ 8000808:	fffffb7f 	.word	0xfffffb7f
  800080c:	08004bf8 	.word	0x08004bf8
- 8000810:	08004c04 	.word	0x08004c04
- 8000814:	08004c20 	.word	0x08004c20
+ 8000810:	08004c14 	.word	0x08004c14
+ 8000814:	08004c2c 	.word	0x08004c2c
 
 08000818 <main>:
 /**
@@ -1143,7 +1139,7 @@ int main(void)
  800083e:	f000 f937 	bl	8000ab0 <MX_LPUART1_UART_Init>
   /* USER CODE BEGIN 2 */
   RTC_WakeUp_Init();
- 8000842:	f7ff fe21 	bl	8000488 <RTC_WakeUp_Init>
+ 8000842:	f7ff ff67 	bl	8000714 <RTC_WakeUp_Init>
 
   ATC_HandleTypeDef lora;
   lora.huart = &hlpuart1;
@@ -1153,7 +1149,7 @@ int main(void)
   join_lora_network(&lora);
  800084a:	1d3b      	adds	r3, r7, #4
  800084c:	0018      	movs	r0, r3
- 800084e:	f7ff ff4f 	bl	80006f0 <join_lora_network>
+ 800084e:	f7ff fec1 	bl	80005d4 <join_lora_network>
   /* USER CODE END 2 */
 
   /* Infinite loop */
@@ -1238,7 +1234,7 @@ int main(void)
 
 	  		// Enter Stop mode
 	  		Enter_Stop_Mode();  // Wakes up via RTC interrupt
- 80008ca:	f7ff fe2b 	bl	8000524 <Enter_Stop_Mode>
+ 80008ca:	f7ff ff71 	bl	80007b0 <Enter_Stop_Mode>
 
 	  		// === Code resumes after wake-up ===
 	  		ConsolePrintf("Resumed after wake-up\r\n");
@@ -1271,7 +1267,7 @@ int main(void)
 
 	  		// Reinit WakeUp timer (MUST be outside the callback!)
 	  		RTC_WakeUp_Init();
- 80008fa:	f7ff fdc5 	bl	8000488 <RTC_WakeUp_Init>
+ 80008fa:	f7ff ff0b 	bl	8000714 <RTC_WakeUp_Init>
 	  		ConsolePrintf("RTC Wake-Up Timer reinitialized\r\n");
  80008fe:	4b0f      	ldr	r3, [pc, #60]	@ (800093c <main+0x124>)
  8000900:	0018      	movs	r0, r3
@@ -1279,7 +1275,7 @@ int main(void)
 	  		join_lora_network(&lora);
  8000906:	1d3b      	adds	r3, r7, #4
  8000908:	0018      	movs	r0, r3
- 800090a:	f7ff fef1 	bl	80006f0 <join_lora_network>
+ 800090a:	f7ff fe63 	bl	80005d4 <join_lora_network>
 	  ConsolePrintf("Going to sleep...\r\n");
  800090e:	46c0      	nop			@ (mov r8, r8)
  8000910:	e7a3      	b.n	800085a <main+0x42>
@@ -8978,7 +8974,7 @@ void HAL_RTCEx_WakeUpTimerIRQHandler(RTC_HandleTypeDef *hrtc)
       HAL_RTCEx_WakeUpTimerEventCallback(hrtc);
  8003224:	687b      	ldr	r3, [r7, #4]
  8003226:	0018      	movs	r0, r3
- 8003228:	f7fd f968 	bl	80004fc <HAL_RTCEx_WakeUpTimerEventCallback>
+ 8003228:	f7fd faae 	bl	8000788 <HAL_RTCEx_WakeUpTimerEventCallback>
 #endif /* USE_HAL_RTC_REGISTER_CALLBACKS */
     }
   }
