@@ -9,11 +9,8 @@ RM := rm -rf
 
 # All of the sources participating in the build are defined here
 -include sources.mk
--include Middlewares/Third_Party/NimaLTD_Driver/ATC/subdir.mk
 -include Drivers/STM32L0xx_HAL_Driver/Src/subdir.mk
 -include Core/Startup/subdir.mk
--include Core/Src/sensirion/subdir.mk
--include Core/Src/lorawan/subdir.mk
 -include Core/Src/subdir.mk
 -include objects.mk
 
@@ -37,34 +34,34 @@ $(wildcard ../makefile.init) \
 $(wildcard ../makefile.targets) \
 
 
-BUILD_ARTIFACT_NAME := atz
+BUILD_ARTIFACT_NAME := CWH
 BUILD_ARTIFACT_EXTENSION := elf
 BUILD_ARTIFACT_PREFIX :=
 BUILD_ARTIFACT := $(BUILD_ARTIFACT_PREFIX)$(BUILD_ARTIFACT_NAME)$(if $(BUILD_ARTIFACT_EXTENSION),.$(BUILD_ARTIFACT_EXTENSION),)
 
 # Add inputs and outputs from these tool invocations to the build variables 
 EXECUTABLES += \
-atz.elf \
+CWH.elf \
 
 MAP_FILES += \
-atz.map \
+CWH.map \
 
 SIZE_OUTPUT += \
 default.size.stdout \
 
 OBJDUMP_LIST += \
-atz.list \
+CWH.list \
 
 
 # All Target
 all: main-build
 
 # Main-build Target
-main-build: atz.elf secondary-outputs
+main-build: CWH.elf secondary-outputs
 
 # Tool invocations
-atz.elf atz.map: $(OBJS) $(USER_OBJS) /home/kevin/source/STM32CubeIDE/CropWatch/tempSensorx2/STM32L073RZTX_FLASH.ld makefile objects.list $(OPTIONAL_TOOL_DEPS)
-	arm-none-eabi-gcc -o "atz.elf" @"objects.list" $(USER_OBJS) $(LIBS) -mcpu=cortex-m0plus -T"/home/kevin/source/STM32CubeIDE/CropWatch/tempSensorx2/STM32L073RZTX_FLASH.ld" --specs=nosys.specs -Wl,-Map="atz.map" -Wl,--gc-sections -static --specs=nano.specs -mfloat-abi=soft -mthumb -Wl,--start-group -lc -lm -Wl,--end-group
+CWH.elf CWH.map: $(OBJS) $(USER_OBJS) /home/kevin/STM32CubeIDE/workspace_eren/CWH/STM32L073RZTX_FLASH.ld makefile objects.list $(OPTIONAL_TOOL_DEPS)
+	arm-none-eabi-gcc -o "CWH.elf" @"objects.list" $(USER_OBJS) $(LIBS) -mcpu=cortex-m0plus -T"/home/kevin/STM32CubeIDE/workspace_eren/CWH/STM32L073RZTX_FLASH.ld" --specs=nosys.specs -Wl,-Map="CWH.map" -Wl,--gc-sections -static --specs=nano.specs -mfloat-abi=soft -mthumb -Wl,--start-group -lc -lm -Wl,--end-group
 	@echo 'Finished building target: $@'
 	@echo ' '
 
@@ -73,14 +70,14 @@ default.size.stdout: $(EXECUTABLES) makefile objects.list $(OPTIONAL_TOOL_DEPS)
 	@echo 'Finished building: $@'
 	@echo ' '
 
-atz.list: $(EXECUTABLES) makefile objects.list $(OPTIONAL_TOOL_DEPS)
-	arm-none-eabi-objdump -h -S $(EXECUTABLES) > "atz.list"
+CWH.list: $(EXECUTABLES) makefile objects.list $(OPTIONAL_TOOL_DEPS)
+	arm-none-eabi-objdump -h -S $(EXECUTABLES) > "CWH.list"
 	@echo 'Finished building: $@'
 	@echo ' '
 
 # Other Targets
 clean:
-	-$(RM) atz.elf atz.list atz.map default.size.stdout
+	-$(RM) CWH.elf CWH.list CWH.map default.size.stdout
 	-@echo ' '
 
 secondary-outputs: $(SIZE_OUTPUT) $(OBJDUMP_LIST)

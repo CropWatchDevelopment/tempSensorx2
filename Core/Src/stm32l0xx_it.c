@@ -55,10 +55,7 @@
 /* USER CODE END 0 */
 
 /* External variables --------------------------------------------------------*/
-extern DMA_HandleTypeDef hdma_lpuart1_rx;
-extern DMA_HandleTypeDef hdma_lpuart1_tx;
-extern UART_HandleTypeDef hlpuart1;
-extern RTC_HandleTypeDef hrtc;
+
 /* USER CODE BEGIN EV */
 
 /* USER CODE END EV */
@@ -142,43 +139,6 @@ void SysTick_Handler(void)
 /* For the available peripheral interrupt handler names,                      */
 /* please refer to the startup file (startup_stm32l0xx.s).                    */
 /******************************************************************************/
-
-/**
-  * @brief This function handles RTC wake-up timer through EXTI line 20 interrupt.
-  */
-void RTC_IRQHandler(void)
-{
-  HAL_RTCEx_WakeUpTimerIRQHandler(&hrtc);
-}
-
-/**
-  * @brief This function handles DMA1 channel 2 and channel 3 interrupts.
-  */
-void DMA1_Channel2_3_IRQHandler(void)
-{
-  /* USER CODE BEGIN DMA1_Channel2_3_IRQn 0 */
-
-  /* USER CODE END DMA1_Channel2_3_IRQn 0 */
-  HAL_DMA_IRQHandler(&hdma_lpuart1_tx);
-  HAL_DMA_IRQHandler(&hdma_lpuart1_rx);
-  /* USER CODE BEGIN DMA1_Channel2_3_IRQn 1 */
-
-  /* USER CODE END DMA1_Channel2_3_IRQn 1 */
-}
-
-/**
-  * @brief This function handles RNG and LPUART1 Interrupts / LPUART1 wake-up interrupt through EXTI line 28.
-  */
-void RNG_LPUART1_IRQHandler(void)
-{
-  /* USER CODE BEGIN RNG_LPUART1_IRQn 0 */
-
-  /* USER CODE END RNG_LPUART1_IRQn 0 */
-  HAL_UART_IRQHandler(&hlpuart1);
-  /* USER CODE BEGIN RNG_LPUART1_IRQn 1 */
-
-  /* USER CODE END RNG_LPUART1_IRQn 1 */
-}
 
 /* USER CODE BEGIN 1 */
 

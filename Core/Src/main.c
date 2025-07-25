@@ -3,18 +3,8 @@
   ******************************************************************************
   * @file           : main.c
   * @brief          : Main program body
-  ****************************************************************************	  case LORAWAN_DATA_SENDING:
-			// Start timer when entering this state
-			if (data_sending_start_time == 0) {
-				data_sending_start_time = HAL_GetTick();
-			}
-
-			// Check if 10 seconds have passed
-			if ((HAL_GetTick() - data_sending_start_time) >= 10000) {
-				data_sending_start_time = 0; // Reset timer
-				lorawan_state = ENTER_SLEEP_MODE;  // Go to sleep mode
-			}
-		break;ntion
+  ******************************************************************************
+  * @attention
   *
   * Copyright (c) 2025 STMicroelectronics.
   * All rights reserved.
@@ -28,38 +18,39 @@
 /* USER CODE END Header */
 /* Includes ------------------------------------------------------------------*/
 #include "main.h"
-#include "dma.h"
-#include "i2c.h"
-#include "usart.h"
-#include "rtc.h"
-#include "gpio.h"
 
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
-#include "atc.h"
-#include "stdbool.h"
-#include <stdint.h>
-#include <stdio.h>     // for printf, atoi
-#include <string.h>    // for strchr
-#include <stdlib.h>    // for atoi
-/*LoRaWAN Config stuff*/
-#include "lorawan/lorawan_config.h"
-/*Sensirion SHT4x*/
-#include "sensirion/sensirion_common.h"
-#include "sensirion/sensirion_i2c_hal.h"
-#include "sensirion/sht4x_i2c.h"
-#include "sensirion/sensirion.h"
+#include <stdio.h>
+#include <stdarg.h>
+#include <string.h>
+#include <stdbool.h> // For bool, true, false
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
 /* USER CODE BEGIN PTD */
-#define RTC_WAKEUP_PERIOD_SECONDS 5  // Sleep for 5 seconds // CHANGED: Added for RTC wake-up period
+
 /* USER CODE END PTD */
 
 /* Private define ------------------------------------------------------------*/
 /* USER CODE BEGIN PD */
-#define LORAWAN_JOIN_TIMEOUT_MS ((uint32_t)10000)  // 15 seconds, I think....
-#define sensirion_hal_sleep_us sensirion_i2c_hal_sleep_usec
+#define AT_RESPONSE_BUFFER_SIZE 		256
+#define DEV_EUI_LENGTH          		16
+#define APP_EUI_LENGTH          		16
+#define APP_KEY_LENGTH          		32
+#define AS923_1_FREQ_MIN        		923200000
+#define AS923_1_FREQ_MAX        		923400000
+#define DEFAULT_FREQ            		923200000
+#define JAPAN_REGION            		9
+#define TTN_SUBBAND_CHANNEL     		0
+#define TX_POWER                		11
+#define DATA_RATE               		0
+#define JOIN_TIMEOUT_MS         		10000
+
+// I2C DEFINES
+#define SHT40_I2C_ADDR 					(0x44 << 1) 				// SHT40 I2C address (shifted for HAL)
+#define SHT40_MEASURE_HIGH_PRECISION 	0xFD 						// High-precision measurement command
+#define TIMEOUT 						100 						// I2C timeout in ms
 /* USER CODE END PD */
 
 /* Private macro -------------------------------------------------------------*/
@@ -68,109 +59,95 @@
 /* USER CODE END PM */
 
 /* Private variables ---------------------------------------------------------*/
+I2C_HandleTypeDef hi2c1;
+
+RTC_HandleTypeDef hrtc;
+
+UART_HandleTypeDef huart1;
+UART_HandleTypeDef huart2;
 
 /* USER CODE BEGIN PV */
-uint32_t join_start_time = 0;
-ATC_HandleTypeDef lora;
-bool AWAKE = false;
-int resp = 0;
-char respBuf[64];
-bool updated = false;
-int rcv = 0;
-int loraWAKE = 0;
-int loraErr = 0;
-
-uint32_t data_sending_start_time = 0; // Add timer variable for data sending
-
-// LoRaWAN transmission status
 typedef enum {
-    TX_STATUS_UNKNOWN,
-    TX_STATUS_ACK,
-    TX_STATUS_FAIL,
-    TX_STATUS_SENT
-} TX_Status_t;
-volatile TX_Status_t last_tx_status = TX_STATUS_UNKNOWN;
+    LORAWAN_ERROR_OK = 0,
+    LORAWAN_ERROR_INVALID_PARAM = -1,
+    LORAWAN_ERROR_COMMUNICATION = -2,
+    LORAWAN_ERROR_UNEXPECTED_RESPONSE = -3,
+    LORAWAN_ERROR_TIMEOUT = -4,
+    LORAWAN_ERROR_NOT_JOINED = -5
+} LoRaWAN_Error_t;
 
-typedef enum {
-    LORAWAN_NOT_JOINED,
-    LORAWAN_JOINING,
-    LORAWAN_JOINED,
-    LORAWAN_DATA_RECEIVED,
-	LORAWAN_DATA_SENDING,
-	ENTER_SLEEP_MODE,
-	DEVICE_SLEEP,
-	COLLECT_DATA,
-//	LORAWAN_MODULE_ERROR,
-} LoRaWAN_State_t;
-volatile LoRaWAN_State_t lorawan_state = COLLECT_DATA;
-
-void cb_WAKE(const char* str)
-{
-	AWAKE = true;
-	// Start a timer to determine when the module will sleep again
-}
-
-void cb_JOIN_SUCCESS(const char* str)
-{
-	lorawan_state = LORAWAN_JOINED;
-}
-void cb_NOT_JOINED(const char* str)
-{
-	lorawan_state = LORAWAN_NOT_JOINED;
-}
-void cb_DATA_RESPONSE(const char* str)
-{
-  // Check if this is a TX confirmation
-  if (strstr(str, "TX:") != NULL) {
-    lorawan_state = ENTER_SLEEP_MODE;
-  }
-  // You can parse downlink data here if needed
-}
-
-const ATC_EventTypeDef events[] = {
-
-	/*JOINING CALLBACKS*/
-    { "JOIN: [OK]",      cb_JOIN_SUCCESS        },
-    { "JOIN: [FAIL]",    cb_NOT_JOINED          },
-    { "ERROR 81",        cb_NOT_JOINED          },
-
-	/* DATA TX/RX CALLBACKS */
-	{ "TX: [",           cb_DATA_RESPONSE       }, //Datasheet Section: 5.2.10 TX
-    { "RX: W:",          cb_DATA_RESPONSE       },
-
-	/* MODULE STATUS CALLBACKS */
-    { "WAKE",            cb_WAKE                }, //Datasheet Section: 5.2.11 WAKE
-};
+// Structure for ATC handle
+typedef struct {
+    UART_HandleTypeDef *huart; // Pointer to UART handle (e.g., &huart2)
+} ATC_HandleTypeDef;
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
 void SystemClock_Config(void);
+static void MX_GPIO_Init(void);
+static void MX_I2C1_Init(void);
+static void MX_USART1_UART_Init(void);
+static void MX_RTC_Init(void);
+static void MX_USART2_UART_Init(void);
 /* USER CODE BEGIN PFP */
 
 /* USER CODE END PFP */
 
 /* Private user code ---------------------------------------------------------*/
 /* USER CODE BEGIN 0 */
-void HAL_UARTEx_RxEventCallback(UART_HandleTypeDef *huart, uint16_t Size)
+void RTC_IRQHandler(void)
 {
-	if (huart->Instance == LPUART1)
-	{
-		ATC_IdleLineCallback(&lora, Size);
-	}
+    HAL_RTCEx_WakeUpTimerIRQHandler(&hrtc);
 }
 
-/**
- * @brief RTC Wake-up Timer Event Callback
- * This function is called when the RTC wake-up timer expires
- */
+void RTC_WakeUp_Init(void)
+{
+	ConsolePrintf("Starting RTC Wake-Up Timer configuration\r\n");
+
+	// Disable the Wake-Up Timer before configuring
+	HAL_RTCEx_DeactivateWakeUpTimer(&hrtc);
+	ConsolePrintf("RTC Wake-Up Timer disabled\r\n");
+
+	// Configure Wake-Up Timer for 60 seconds using LSI (~40 kHz)
+	// With AsynchPrediv = 127, SynchPrediv = 255: CK_SPRE = 40,000 / (128 * 256) = ~1.22 Hz
+	// For ~60 seconds: WakeUpCounter = (60 * 1.22) - 1 = ~72
+	if (HAL_RTCEx_SetWakeUpTimer_IT(&hrtc, 59, RTC_WAKEUPCLOCK_CK_SPRE_16BITS) != HAL_OK)
+	{
+		ConsolePrintf("RTC Wake-Up Timer Init Failed\r\n");
+
+	}
+	else
+	{
+		ConsolePrintf("RTC Wake-Up Timer Initialized for ~60 seconds\r\n");
+	}
+
+	// Enable RTC Wake-Up interrupt in NVIC
+	HAL_NVIC_SetPriority(RTC_IRQn, 0, 0);
+	HAL_NVIC_EnableIRQ(RTC_IRQn);
+	ConsolePrintf("RTC Wake-Up interrupt enabled in NVIC\r\n");
+}
+
 void HAL_RTCEx_WakeUpTimerEventCallback(RTC_HandleTypeDef *hrtc)
 {
-    // Clean up the wake-up timer
-    HAL_RTCEx_DeactivateWakeUpTimer(hrtc);
-    __HAL_RTC_WAKEUPTIMER_CLEAR_FLAG(hrtc, RTC_FLAG_WUTF);
-    
-    // Set the next state
-    lorawan_state = DEVICE_SLEEP;
+    // Reconfigure system clock after wake-up
+    SystemClock_Config();
+
+    // Print message
+    ConsolePrintf("Woke up at %s\r\n", "1-minute interval");
+}
+
+void Enter_Stop_Mode(void)
+{
+	ConsolePrintf("Preparing to enter Stop mode\r\n");
+
+    // Clear Wake-Up flag
+    __HAL_RTC_WAKEUPTIMER_CLEAR_FLAG(&hrtc, RTC_FLAG_WUTF);
+    ConsolePrintf("RTC Wake-Up flag cleared\r\n");
+
+    // Enter Stop mode (low-power mode)
+    ConsolePrintf("Entering Stop mode\r\n");
+    HAL_PWR_EnterSTOPMode(PWR_LOWPOWERREGULATOR_ON, PWR_STOPENTRY_WFI);
+    ConsolePrintf("Exited Stop mode\r\n");
 }
 /* USER CODE END 0 */
 
@@ -191,7 +168,7 @@ int main(void)
   HAL_Init();
 
   /* USER CODE BEGIN Init */
-
+  HAL_Delay(10000);
   /* USER CODE END Init */
 
   /* Configure the system clock */
@@ -203,160 +180,59 @@ int main(void)
 
   /* Initialize all configured peripherals */
   MX_GPIO_Init();
-  MX_DMA_Init();
   MX_I2C1_Init();
-  MX_LPUART1_UART_Init();
+  MX_USART1_UART_Init();
   MX_RTC_Init();
+  MX_USART2_UART_Init();
   /* USER CODE BEGIN 2 */
+  RTC_WakeUp_Init();
 
-  // Configure EXTI Line 20 for RTC wake-up timer
-  __HAL_RCC_PWR_CLK_ENABLE();
-
-  // Configure EXTI Line20 (RTC Wake-up Timer)
-  __HAL_RTC_WAKEUPTIMER_EXTI_ENABLE_IT();
-  __HAL_RTC_WAKEUPTIMER_EXTI_ENABLE_RISING_EDGE();
-
-  // Initialize ATC LoRa handle
-  lora.hUart = &hlpuart1;
-  lora.psEvents = (ATC_EventTypeDef*)events;
-  lora.Events = sizeof(events) / sizeof(events[0]);
-  lora.Size = 256;  // Buffer size
-  lora.pRxBuff = malloc(lora.Size);
-  lora.pReadBuff = malloc(lora.Size);
-  lora.RxIndex = 0;
-  lora.RespCount = 0;
-  
-  // Initialize response pointers to NULL
-  for(int i = 0; i < 16; i++) {  // ATC_RESP_MAX is typically 16
-    lora.ppResp[i] = NULL;
-  }
-  char* CONNECTION_STATUS = NULL;
-//  ATC_SendReceive(&lora, "ATS 213=1000\r\n", 200, &CONNECTION_STATUS, 2000, 1, "OK");
-//  ATC_SendReceive(&lora, "AT&W", 200, &CONNECTION_STATUS, 2000, 1, "OK");
-  HAL_Delay(10000);
+  ATC_HandleTypeDef lora;
+  lora.huart = &huart2;
   /* USER CODE END 2 */
 
   /* Infinite loop */
   /* USER CODE BEGIN WHILE */
+  ConsolePrintf("Entering main loop\r\n");
   while (1)
   {
     /* USER CODE END WHILE */
 
     /* USER CODE BEGIN 3 */
-	  ATC_Loop(&lora);
-	  switch (lorawan_state) {
-	  case LORAWAN_NOT_JOINED:
-		{
-			ATC_SendReceive(&lora, "AT\r\n", 200, &CONNECTION_STATUS, 2000, 1, "OK");
-			LoRaWAN_Error_t join_result = join_network(&lora);
-			if (join_result == LORAWAN_OK) {
-				lorawan_state = LORAWAN_JOINING;
-			} else {
-				// Could implement retry logic here
-			}
-		}
-		break;
-	  case LORAWAN_JOINING:
-		// Wait for join callback to change state
-		break;
-	  case LORAWAN_JOINED:
-		  // Ready to send data
-		  last_tx_status = TX_STATUS_UNKNOWN; // Reset status before sending
+	  ConsolePrintf("Going to sleep...\r\n");
 
-		  ATC_SendReceive(&lora, "AT\r\n", 200, &CONNECTION_STATUS, 2000, 1, "OK");
-		  resp = ATC_SendReceive(&lora, "ATI 3001\r\n", 200, &CONNECTION_STATUS, 2000, 2, "0\r", "1");
-		  if (CONNECTION_STATUS == 0)
-		  {
-			  lorawan_state = LORAWAN_NOT_JOINED;
-			  break;
-		  }
+	  		HAL_I2C_DeInit(&hi2c1);
+	  		HAL_UART_DeInit(&huart1);
+	  		// De-init LPUART1 (LoRaWAN UART)
+	  		HAL_UART_DeInit(&huart2);
 
-		  // Create AT command with sensor data
-		  char at_command[64];
-		  uint16_t sensor_val = temp_ticks_2; // Use sensor data
-		  format_at_send_cmd(sensor_val, 4, at_command);
+	  		// Disable LPUART wake-up from Stop mode
+	  		__HAL_UART_DISABLE_IT(&huart1, UART_IT_RXNE); // Disable RXNE interrupt
+	  		__HAL_UART_DISABLE_IT(&huart1, UART_IT_IDLE); // Disable IDLE interrupt
+	  		__HAL_UART_CLEAR_FLAG(&huart1, UART_FLAG_RXNE | UART_FLAG_IDLE); // Clear any pending flags
 
-		  char* ATSEND_Result = NULL;
-		  resp = ATC_SendReceive(&lora, at_command, 200, &ATSEND_Result, 2000, 2, "OK\r", "ERROR");
-		  if (resp == 1) {
-			  lorawan_state = LORAWAN_DATA_SENDING;
-		  } else {
-			  lorawan_state = LORAWAN_NOT_JOINED;
-		  }
-	  break;
-	  case LORAWAN_DATA_SENDING:
-			// Start timer when entering this state
-			if (data_sending_start_time == 0) {
-				data_sending_start_time = HAL_GetTick();
-			}
+	  		__HAL_UART_DISABLE_IT(&huart2, UART_IT_RXNE); // Disable RXNE interrupt
+	  		__HAL_UART_DISABLE_IT(&huart2, UART_IT_IDLE); // Disable IDLE interrupt
+	  		__HAL_UART_CLEAR_FLAG(&huart2, UART_FLAG_RXNE | UART_FLAG_IDLE); // Clear any pending flags
 
-			// Check if 10 seconds have passed
-			if ((HAL_GetTick() - data_sending_start_time) >= 10000) {
-				data_sending_start_time = 0; // Reset timer
-				lorawan_state = ENTER_SLEEP_MODE;  // Go directly to sleep, not DEVICE_SLEEP
-			}
-		break;
-	  case LORAWAN_DATA_RECEIVED:
-		  // Handle received downlink data (this is only for actual downlink messages)
-		  lorawan_state = ENTER_SLEEP_MODE;
-		  break;
-	  case ENTER_SLEEP_MODE:
-		  // Put LoRa module to sleep first
-		  resp = ATC_SendReceive(&lora, "AT+SLEEP\r\n", 200, &CONNECTION_STATUS, 2000, 2, "0\r", "1");
-		  HAL_Delay(5000);
-		  
-		  // Simple approach - deactivate any existing timer
-		  HAL_RTCEx_DeactivateWakeUpTimer(&hrtc);
-		  HAL_Delay(10);
-		  
-		  // Clear any pending wake-up timer flags
-		  __HAL_RTC_WAKEUPTIMER_CLEAR_FLAG(&hrtc, RTC_FLAG_WUTF);
-		  
-		  // Set up the wake-up timer for 5 seconds
-		  if (HAL_RTCEx_SetWakeUpTimer_IT(&hrtc, 11561, RTC_WAKEUPCLOCK_RTCCLK_DIV16) != HAL_OK) {
-		      // If HAL function fails, try direct register access
-		      __HAL_RTC_WRITEPROTECTION_DISABLE(&hrtc);
-		      
-		      // Ensure timer is disabled first
-		      hrtc.Instance->CR &= ~RTC_CR_WUTE;
-		      while((__HAL_RTC_WAKEUPTIMER_GET_FLAG(&hrtc, RTC_FLAG_WUTWF)) == 0);
-		      
-		      // Set timer value and configuration
-		      hrtc.Instance->WUTR = 11561;
-		      hrtc.Instance->CR &= ~RTC_CR_WUCKSEL;
-		      hrtc.Instance->CR |= RTC_WAKEUPCLOCK_RTCCLK_DIV16;
-		      
-		      // Enable interrupt and timer
-		      __HAL_RTC_WAKEUPTIMER_ENABLE_IT(&hrtc, RTC_IT_WUT);
-		      hrtc.Instance->CR |= RTC_CR_WUTE;
-		      
-		      __HAL_RTC_WRITEPROTECTION_ENABLE(&hrtc);
-		  }
-		  
-		  // Suspend SysTick and enter STOP mode
-		  HAL_SuspendTick();
-		  HAL_PWR_EnterSTOPMode(PWR_LOWPOWERREGULATOR_ON, PWR_STOPENTRY_WFI);
-		  
-		  // After wake-up, restore system clock first
-		  SystemClock_Config();
-		  HAL_ResumeTick();
-		  
-		  // Don't immediately clean up the timer - let the interrupt handler do it
-		  // The wake-up callback will set the state
-		  break;
 
-	  case DEVICE_SLEEP:
-		  lorawan_state = COLLECT_DATA;
-	  break;
-	  case COLLECT_DATA:
-		  // Scan for sensors and read data
-		  scan_i2c_bus();
-		  if (has_sensor_1 || has_sensor_2) {
-			  sensor_init_and_read();
-		  }
-		  lorawan_state = LORAWAN_JOINED; // Go back to send data
-		  break;
-	  }
+	  		// Enter Stop mode
+	  		Enter_Stop_Mode();  // Wakes up via RTC interrupt
+
+	  		// === Code resumes after wake-up ===
+	  		ConsolePrintf("Resumed after wake-up\r\n");
+
+	  		// Reconfigure clocks
+	  		SystemClock_Config();
+	  		ConsolePrintf("System clock reconfigured\r\n");
+
+	  		// Reinit UART
+	  		MX_USART1_UART_Init();
+	  		ConsolePrintf("UART reinitialized\r\n");
+
+	  		// Reinit WakeUp timer (MUST be outside the callback!)
+	  		RTC_WakeUp_Init();
+	  		ConsolePrintf("RTC Wake-Up Timer reinitialized\r\n");
   }
   /* USER CODE END 3 */
 }
@@ -402,9 +278,10 @@ void SystemClock_Config(void)
   {
     Error_Handler();
   }
-  PeriphClkInit.PeriphClockSelection = RCC_PERIPHCLK_LPUART1|RCC_PERIPHCLK_I2C1
-                              |RCC_PERIPHCLK_RTC;
-  PeriphClkInit.Lpuart1ClockSelection = RCC_LPUART1CLKSOURCE_PCLK1;
+  PeriphClkInit.PeriphClockSelection = RCC_PERIPHCLK_USART1|RCC_PERIPHCLK_USART2
+                              |RCC_PERIPHCLK_I2C1|RCC_PERIPHCLK_RTC;
+  PeriphClkInit.Usart1ClockSelection = RCC_USART1CLKSOURCE_PCLK2;
+  PeriphClkInit.Usart2ClockSelection = RCC_USART2CLKSOURCE_PCLK1;
   PeriphClkInit.I2c1ClockSelection = RCC_I2C1CLKSOURCE_PCLK1;
   PeriphClkInit.RTCClockSelection = RCC_RTCCLKSOURCE_LSI;
   if (HAL_RCCEx_PeriphCLKConfig(&PeriphClkInit) != HAL_OK)
@@ -413,8 +290,221 @@ void SystemClock_Config(void)
   }
 }
 
-/* USER CODE BEGIN 4 */
+/**
+  * @brief I2C1 Initialization Function
+  * @param None
+  * @retval None
+  */
+static void MX_I2C1_Init(void)
+{
 
+  /* USER CODE BEGIN I2C1_Init 0 */
+
+  /* USER CODE END I2C1_Init 0 */
+
+  /* USER CODE BEGIN I2C1_Init 1 */
+
+  /* USER CODE END I2C1_Init 1 */
+  hi2c1.Instance = I2C1;
+  hi2c1.Init.Timing = 0x00000608;
+  hi2c1.Init.OwnAddress1 = 0;
+  hi2c1.Init.AddressingMode = I2C_ADDRESSINGMODE_7BIT;
+  hi2c1.Init.DualAddressMode = I2C_DUALADDRESS_DISABLE;
+  hi2c1.Init.OwnAddress2 = 0;
+  hi2c1.Init.OwnAddress2Masks = I2C_OA2_NOMASK;
+  hi2c1.Init.GeneralCallMode = I2C_GENERALCALL_DISABLE;
+  hi2c1.Init.NoStretchMode = I2C_NOSTRETCH_DISABLE;
+  if (HAL_I2C_Init(&hi2c1) != HAL_OK)
+  {
+    Error_Handler();
+  }
+
+  /** Configure Analogue filter
+  */
+  if (HAL_I2CEx_ConfigAnalogFilter(&hi2c1, I2C_ANALOGFILTER_ENABLE) != HAL_OK)
+  {
+    Error_Handler();
+  }
+
+  /** Configure Digital filter
+  */
+  if (HAL_I2CEx_ConfigDigitalFilter(&hi2c1, 0) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  /* USER CODE BEGIN I2C1_Init 2 */
+
+  /* USER CODE END I2C1_Init 2 */
+
+}
+
+/**
+  * @brief RTC Initialization Function
+  * @param None
+  * @retval None
+  */
+static void MX_RTC_Init(void)
+{
+
+  /* USER CODE BEGIN RTC_Init 0 */
+
+  /* USER CODE END RTC_Init 0 */
+
+  /* USER CODE BEGIN RTC_Init 1 */
+
+  /* USER CODE END RTC_Init 1 */
+
+  /** Initialize RTC Only
+  */
+  hrtc.Instance = RTC;
+  hrtc.Init.HourFormat = RTC_HOURFORMAT_24;
+  hrtc.Init.AsynchPrediv = 127;
+  hrtc.Init.SynchPrediv = 255;
+  hrtc.Init.OutPut = RTC_OUTPUT_DISABLE;
+  hrtc.Init.OutPutRemap = RTC_OUTPUT_REMAP_NONE;
+  hrtc.Init.OutPutPolarity = RTC_OUTPUT_POLARITY_HIGH;
+  hrtc.Init.OutPutType = RTC_OUTPUT_TYPE_OPENDRAIN;
+  if (HAL_RTC_Init(&hrtc) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  /* USER CODE BEGIN RTC_Init 2 */
+
+  /* USER CODE END RTC_Init 2 */
+
+}
+
+/**
+  * @brief USART1 Initialization Function
+  * @param None
+  * @retval None
+  */
+static void MX_USART1_UART_Init(void)
+{
+
+  /* USER CODE BEGIN USART1_Init 0 */
+
+  /* USER CODE END USART1_Init 0 */
+
+  /* USER CODE BEGIN USART1_Init 1 */
+
+  /* USER CODE END USART1_Init 1 */
+  huart1.Instance = USART1;
+  huart1.Init.BaudRate = 115200;
+  huart1.Init.WordLength = UART_WORDLENGTH_8B;
+  huart1.Init.StopBits = UART_STOPBITS_1;
+  huart1.Init.Parity = UART_PARITY_NONE;
+  huart1.Init.Mode = UART_MODE_TX_RX;
+  huart1.Init.HwFlowCtl = UART_HWCONTROL_NONE;
+  huart1.Init.OverSampling = UART_OVERSAMPLING_16;
+  huart1.Init.OneBitSampling = UART_ONE_BIT_SAMPLE_DISABLE;
+  huart1.AdvancedInit.AdvFeatureInit = UART_ADVFEATURE_NO_INIT;
+  if (HAL_UART_Init(&huart1) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  /* USER CODE BEGIN USART1_Init 2 */
+  ConsolePrintf("USART1 (DBG) Cnfigured\r\n");
+  /* USER CODE END USART1_Init 2 */
+
+}
+
+/**
+  * @brief USART2 Initialization Function
+  * @param None
+  * @retval None
+  */
+static void MX_USART2_UART_Init(void)
+{
+
+  /* USER CODE BEGIN USART2_Init 0 */
+
+  /* USER CODE END USART2_Init 0 */
+
+  /* USER CODE BEGIN USART2_Init 1 */
+
+  /* USER CODE END USART2_Init 1 */
+  huart2.Instance = USART2;
+  huart2.Init.BaudRate = 115200;
+  huart2.Init.WordLength = UART_WORDLENGTH_8B;
+  huart2.Init.StopBits = UART_STOPBITS_1;
+  huart2.Init.Parity = UART_PARITY_NONE;
+  huart2.Init.Mode = UART_MODE_TX_RX;
+  huart2.Init.HwFlowCtl = UART_HWCONTROL_NONE;
+  huart2.Init.OverSampling = UART_OVERSAMPLING_16;
+  huart2.Init.OneBitSampling = UART_ONE_BIT_SAMPLE_DISABLE;
+  huart2.AdvancedInit.AdvFeatureInit = UART_ADVFEATURE_NO_INIT;
+  if (HAL_UART_Init(&huart2) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  /* USER CODE BEGIN USART2_Init 2 */
+
+  /* USER CODE END USART2_Init 2 */
+
+}
+
+/**
+  * @brief GPIO Initialization Function
+  * @param None
+  * @retval None
+  */
+static void MX_GPIO_Init(void)
+{
+  GPIO_InitTypeDef GPIO_InitStruct = {0};
+  /* USER CODE BEGIN MX_GPIO_Init_1 */
+
+  /* USER CODE END MX_GPIO_Init_1 */
+
+  /* GPIO Ports Clock Enable */
+  __HAL_RCC_GPIOA_CLK_ENABLE();
+  __HAL_RCC_GPIOB_CLK_ENABLE();
+
+  /*Configure GPIO pin Output Level */
+  HAL_GPIO_WritePin(GPIOB, GPIO_PIN_5, GPIO_PIN_RESET);
+
+  /*Configure GPIO pin : PB5 */
+  GPIO_InitStruct.Pin = GPIO_PIN_5;
+  GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
+  GPIO_InitStruct.Pull = GPIO_NOPULL;
+  GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
+  HAL_GPIO_Init(GPIOB, &GPIO_InitStruct);
+
+  /* USER CODE BEGIN MX_GPIO_Init_2 */
+
+  /* USER CODE END MX_GPIO_Init_2 */
+}
+
+/* USER CODE BEGIN 4 */
+void ConsolePrintf(const char *format, ...)
+{
+    char buffer[128]; // Buffer for the original message
+    char timestamp_buffer[32]; // Buffer for timestamp
+    char final_buffer[160]; // Combined buffer (timestamp + message)
+
+    // Get time and date from RTC
+    RTC_DateTypeDef date;
+    RTC_TimeTypeDef time;
+    HAL_RTC_GetTime(&hrtc, &time, RTC_FORMAT_BIN);
+    HAL_RTC_GetDate(&hrtc, &date, RTC_FORMAT_BIN);
+
+    // Format timestamp as [YYYY-MM-DD HH:MM:SS]
+    snprintf(timestamp_buffer, sizeof(timestamp_buffer), "[20%02d-%02d-%02d %02d:%02d:%02d] ",
+             date.Year, date.Month, date.Date,
+             time.Hours, time.Minutes, time.Seconds);
+
+    // Format the original message
+    va_list args;
+    va_start(args, format);
+    vsnprintf(buffer, sizeof(buffer), format, args);
+    va_end(args);
+
+    // Combine timestamp and message
+    snprintf(final_buffer, sizeof(final_buffer), "%s%s", timestamp_buffer, buffer);
+
+    // Transmit the combined message
+    HAL_UART_Transmit(&huart1, (uint8_t *)final_buffer, strlen(final_buffer), HAL_MAX_DELAY);
+}
 /* USER CODE END 4 */
 
 /**
@@ -426,7 +516,6 @@ void Error_Handler(void)
   /* USER CODE BEGIN Error_Handler_Debug */
   /* User can add his own implementation to report the HAL error return state */
   __disable_irq();
-  HAL_GPIO_WritePin(I2C_ENABLE_GPIO_Port, I2C_ENABLE_Pin, GPIO_PIN_SET);
   while (1)
   {
   }
