@@ -136,6 +136,8 @@ LoRaWAN_Error_t send_data_and_get_response(ATC_HandleTypeDef *lora, const char *
         return LORAWAN_ERROR_INVALID_PARAM;
     }
 
+    ATC_SendReceive(lora, "AT\r\n", strlen(4), response, response_size, timeout_ms, expected_response);
+    HAL_Delay(300);
     int result = ATC_SendReceive(lora, data, strlen(data), response, response_size, timeout_ms, expected_response);
 
     if (result == -1) {
