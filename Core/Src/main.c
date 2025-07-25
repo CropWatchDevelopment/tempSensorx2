@@ -111,12 +111,14 @@ int ATC_SendReceive(ATC_HandleTypeDef *lora, const char *command, uint32_t comma
     }
 
     if (response != NULL && response_size > 0) {
+        uint16_t rx_len = 0;
         memset(response, 0, response_size);
-        status = HAL_UART_Receive(lora->huart, (uint8_t *)response, response_size - 1, timeout_ms);
+        status = HAL_UARTEx_ReceiveToIdle(lora->huart, (uint8_t *)response,
+                                          response_size - 1, &rx_len, timeout_ms);
         if (status != HAL_OK) {
             return -4; // Timeout or receive error
         }
-        response[response_size - 1] = '\0';
+        response[rx_len] = '\0';
     }
 
     if (expected_response != NULL && response != NULL) {
@@ -160,12 +162,17 @@ LoRaWAN_Error_t join_lora_network(ATC_HandleTypeDef *lora)
     }
 
     memset(response, 0, AT_RESPONSE_BUFFER_SIZE);
-    HAL_StatusTypeDef hal_status = HAL_UART_Receive(lora->huart, (uint8_t *)response, AT_RESPONSE_BUFFER_SIZE - 1, JOIN_TIMEOUT_MS);
+    uint16_t rx_len = 0;
+    HAL_StatusTypeDef hal_status = HAL_UARTEx_ReceiveToIdle(lora->huart,
+                                            (uint8_t *)response,
+                                            AT_RESPONSE_BUFFER_SIZE - 1,
+                                            &rx_len,
+                                            JOIN_TIMEOUT_MS);
     if (hal_status != HAL_OK) {
         ConsolePrintf("Failed to receive join response: %d\r\n", hal_status);
         return LORAWAN_ERROR_TIMEOUT;
     }
-    response[AT_RESPONSE_BUFFER_SIZE - 1] = '\0';
+    response[rx_len] = '\0';
 
     if (strstr(response, "JOINED") != NULL) {
         ConsolePrintf("Network joined successfullyrr\r\n");
