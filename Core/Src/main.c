@@ -193,7 +193,54 @@ LoRaWAN_Error_t join_lora_network(ATC_HandleTypeDef *lora)
 
 
 
+HAL_StatusTypeDef SHT40_Read(int16_t *temperature, int16_t *humidity)
+{
+    ConsolePrintf("Starting SHT40 read operation\r\n");
 
+    uint8_t tx_data[1] = {SHT40_MEASURE_HIGH_PRECISION};
+    uint8_t rx_data[6]; // 6 bytes: 2 temp, 1 CRC, 2 hum, 1 CRC
+
+    // Send measurement command
+    ConsolePrintf("Sending SHT40 measurement command (0x%02X)\r\n", SHT40_MEASURE_HIGH_PRECISION);
+    HAL_StatusTypeDef status = HAL_I2C_Master_Transmit(&hi2c1, 0x44, tx_data, 1, TIMEOUT);
+    if (status != HAL_OK)
+    {
+        ConsolePrintf("SHT40 I2C transmit failed, status: %d\r\n", status);
+        return status;
+    }
+    ConsolePrintf("SHT40 measurement command sent\r\n");
+
+    // Wait for measurement (~8.2ms for high precision)
+    ConsolePrintf("Waiting 10ms for SHT40 measurement\r\n");
+    HAL_Delay(10);
+
+    // Read 6 bytes (temp + CRC + humidity + CRC)
+    ConsolePrintf("Reading 6 bytes from SHT40\r\n");
+    status = HAL_I2C_Master_Receive(&hi2c1, SHT40_I2C_ADDR, rx_data, 6, TIMEOUT);
+    if (status != HAL_OK)
+    {
+        ConsolePrintf("SHT40 I2C receive failed, status: %d\r\n", status);
+        return status;
+    }
+    ConsolePrintf("SHT40 data received: %02X %02X %02X %02X %02X %02X\r\n",
+                  rx_data[0], rx_data[1], rx_data[2], rx_data[3], rx_data[4], rx_data[5]);
+
+    // Convert temperature to �C*10
+    uint16_t temp_raw = (rx_data[0] << 8) | rx_data[1];
+    *temperature = (int16_t)((-45.0f + 175.0f * ((float)temp_raw / 65535.0f)) * 10);
+    ConsolePrintf("Raw temperature: %u, Converted: %d (0.1�C)\r\n", temp_raw, *temperature);
+
+    // Convert humidity to %RH*10
+    uint16_t hum_raw = (rx_data[3] << 8) | rx_data[4];
+    *humidity = (int16_t)((-6.0f + 125.0f * ((float)hum_raw / 65535.0f)) * 10);
+    ConsolePrintf("Raw humidity: %u, Converted: %d (0.1%%RH)\r\n", hum_raw, *humidity);
+
+    // Optional: CRC check (rx_data[2] for temp, rx_data[5] for humidity)
+    // Add if needed (see CRC function below)
+    ConsolePrintf("SHT40 read completed successfully\r\n");
+
+    return HAL_OK;
+}
 
 
 
@@ -357,6 +404,9 @@ int main(void)
 	  		RTC_WakeUp_Init();
 	  		ConsolePrintf("RTC Wake-Up Timer reinitialized\r\n");
 
+	  		int16_t t = 0;
+	  		int16_t h = 0;
+	  		SHT40_Read(t,h);
             char response[32];
             ATC_SendReceive(&lora, "AT\r\n", strlen("AT\r\n"), response, sizeof(response), 5000, "OK");
             char response2[64];
@@ -590,7 +640,7 @@ static void MX_GPIO_Init(void)
   __HAL_RCC_GPIOB_CLK_ENABLE();
 
   /*Configure GPIO pin Output Level */
-  HAL_GPIO_WritePin(GPIOB, GPIO_PIN_5, GPIO_PIN_RESET);
+  HAL_GPIO_WritePin(GPIOB, GPIO_PIN_5, GPIO_PIN_SET);
 
   /*Configure GPIO pin : PB5 */
   GPIO_InitStruct.Pin = GPIO_PIN_5;
