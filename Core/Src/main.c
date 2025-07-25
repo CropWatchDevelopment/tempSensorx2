@@ -358,11 +358,10 @@ int main(void)
 	  		RTC_WakeUp_Init();
 	  		ConsolePrintf("RTC Wake-Up Timer reinitialized\r\n");
 
-	  		char* response = NULL;
-	  		ATC_SendReceive(&lora, "AT\r\n", 4, response, 100, 5000, "OK");
-
-	  		char* response2 = NULL;
-	  		ATC_SendReceive(&lora, "AT+SEND \"AA\"\r\n", 4, response2, 100, 5000, "OK");
+            char response[32];
+            ATC_SendReceive(&lora, "AT\r\n", strlen("AT\r\n"), response, sizeof(response), 5000, "OK");
+            char response2[64];
+            ATC_SendReceive(&lora, "AT+SEND \"AA\"\r\n", strlen("AT+SEND \"AA\"\r\n"), response2, sizeof(response2), 5000, "OK");
 	  		__NOP();
 
   }
