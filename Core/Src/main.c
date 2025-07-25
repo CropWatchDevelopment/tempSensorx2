@@ -313,8 +313,8 @@ int main(void)
 	  		scan_i2c_bus();
 	  		sensor_init_and_read();
 
-            uint8_t dummy = 0xAA;
-            LoRaWAN_SendHex(&lora, &dummy, 1);
+            uint8_t payload[] = {0xAA, 0xBB};
+            LoRaWAN_SendHex(&lora, payload, sizeof(payload));
             __NOP();
 
   }
