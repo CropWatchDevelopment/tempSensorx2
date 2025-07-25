@@ -138,7 +138,7 @@ void HAL_RTCEx_WakeUpTimerEventCallback(RTC_HandleTypeDef *hrtc)
 
 void Enter_Stop_Mode(void)
 {
-	ConsolePrintf("Preparing to enter Stop mode\r\n");
+        ConsolePrintf("Preparing to enter Stop mode\r\n");
 
     // Clear Wake-Up flag
     __HAL_RTC_WAKEUPTIMER_CLEAR_FLAG(&hrtc, RTC_FLAG_WUTF);
@@ -146,7 +146,11 @@ void Enter_Stop_Mode(void)
 
     // Enter Stop mode (low-power mode)
     ConsolePrintf("Entering Stop mode\r\n");
+    /* Suspend SysTick to prevent it from waking up the MCU immediately */
+    HAL_SuspendTick();
     HAL_PWR_EnterSTOPMode(PWR_LOWPOWERREGULATOR_ON, PWR_STOPENTRY_WFI);
+    /* Resume SysTick after waking up */
+    HAL_ResumeTick();
     ConsolePrintf("Exited Stop mode\r\n");
 }
 /* USER CODE END 0 */
