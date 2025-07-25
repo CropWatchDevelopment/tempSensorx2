@@ -23,6 +23,7 @@ C_DEPS :=
 # Every subdirectory with source files must be described here
 SUBDIRS := \
 Core/Src \
+Core/Src/sensirion \
 Core/Startup \
 Drivers/STM32L0xx_HAL_Driver/Src \
 

@@ -25,6 +25,7 @@
 #include <stdarg.h>
 #include <string.h>
 #include <stdbool.h> // For bool, true, false
+#include "sensirion/sensirion.h"
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -404,9 +405,9 @@ int main(void)
 	  		RTC_WakeUp_Init();
 	  		ConsolePrintf("RTC Wake-Up Timer reinitialized\r\n");
 
-	  		int16_t t = 0;
-	  		int16_t h = 0;
-	  		SHT40_Read(t,h);
+	  		scan_i2c_bus();
+	  		sensor_init_and_read();
+
             char response[32];
             ATC_SendReceive(&lora, "AT\r\n", strlen("AT\r\n"), response, sizeof(response), 5000, "OK");
             char response2[64];
