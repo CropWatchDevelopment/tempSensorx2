@@ -36,13 +36,13 @@ void scan_i2c_bus(void)
 int sensor_init_and_read(void)
 {
     if (!has_sensor_1 && !has_sensor_2) {
-        return -1;
+        return -200;
     }
 
     error = NO_ERROR;
-    HAL_Delay(100);
 
-    if (has_sensor_1) {
+    if (has_sensor_1)
+    {
         sht4x_init(SHT43_I2C_ADDR_44);
         sht4x_soft_reset();
         sensirion_i2c_hal_sleep_usec(10000);
@@ -50,7 +50,13 @@ int sensor_init_and_read(void)
         error = sht4x_measure_high_precision_ticks(&temp_ticks_1, &hum_ticks_1);
     }
 
-    if (has_sensor_2) {
+    if (error)
+    {
+            return -200;
+    }
+
+    if (has_sensor_2)
+    {
         sht4x_init(SHT40_I2C_ADDR_46);
         sht4x_soft_reset();
         sensirion_i2c_hal_sleep_usec(10000);
@@ -58,8 +64,20 @@ int sensor_init_and_read(void)
         error = sht4x_measure_high_precision_ticks(&temp_ticks_2, &hum_ticks_2);
     }
 
-    if (error) {
+    if (error)
+    {
         return -200;
     }
-    return error;
+
+    // Correct so no negative numbers may ever be returned
+    temp_ticks_1 = (temp_ticks_1 / 100) + 55;
+    temp_ticks_2 = (temp_ticks_2 / 100) + 55;
+
+    hum_ticks_1 = (hum_ticks_1 / 1000);
+
+    // if the value is still less than -55 (as it is less than 0 now) something is very wrong
+    // lets just return too cold here and error out
+    if (temp_ticks_1 < 0 || temp_ticks_2 < 0) return -255;
+
+    return 0;
 }

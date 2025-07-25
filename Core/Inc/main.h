@@ -57,6 +57,8 @@ void Error_Handler(void);
 /* USER CODE END EFP */
 
 /* Private defines -----------------------------------------------------------*/
+#define I2C_ENABLE_PIN_Pin GPIO_PIN_5
+#define I2C_ENABLE_PIN_GPIO_Port GPIOB
 
 /* USER CODE BEGIN Private defines */
 
