@@ -356,6 +356,10 @@ int main(void)
   /* USER CODE BEGIN 2 */
   RTC_WakeUp_Init();
 
+  /* Scan the I2C bus and read sensors once at startup */
+  scan_i2c_bus();
+  sensor_init_and_read();
+
   join_lora_network(&lora);
   /* USER CODE END 2 */
 
@@ -390,13 +394,17 @@ int main(void)
 	  		// === Code resumes after wake-up ===
 	  		ConsolePrintf("Resumed after wake-up\r\n");
 
-	  		// Reconfigure clocks
-	  		SystemClock_Config();
-	  		ConsolePrintf("System clock reconfigured\r\n");
+                        // Reconfigure clocks
+                        SystemClock_Config();
+                        ConsolePrintf("System clock reconfigured\r\n");
 
-	  		// Reinit UART
-	  		MX_USART1_UART_Init();
-	  		ConsolePrintf("UART reinitialized\r\n");
+                        // Reinit I2C peripheral
+                        MX_I2C1_Init();
+                        ConsolePrintf("I2C1 reinitialized\r\n");
+
+                        // Reinit UART
+                        MX_USART1_UART_Init();
+                        ConsolePrintf("UART reinitialized\r\n");
 
 	  		MX_LPUART1_UART_Init();
 	  		ConsolePrintf("LPUART1 (lora) reinitialized\r\n");

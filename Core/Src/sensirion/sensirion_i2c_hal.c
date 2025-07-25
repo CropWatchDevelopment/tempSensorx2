@@ -1,145 +1,35 @@
-///*
-// * Copyright (c) 2018, Sensirion AG
-// * All rights reserved.
-// *
-// * Redistribution and use in source and binary forms, with or without
-// * modification, are permitted provided that the following conditions are met:
-// *
-// * * Redistributions of source code must retain the above copyright notice, this
-// *   list of conditions and the following disclaimer.
-// *
-// * * Redistributions in binary form must reproduce the above copyright notice,
-// *   this list of conditions and the following disclaimer in the documentation
-// *   and/or other materials provided with the distribution.
-// *
-// * * Neither the name of Sensirion AG nor the names of its
-// *   contributors may be used to endorse or promote products derived from
-// *   this software without specific prior written permission.
-// *
-// * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
-// * AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
-// * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
-// * ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE
-// * LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
-// * CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF
-// * SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
-// * INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN
-// * CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
-// * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
-// * POSSIBILITY OF SUCH DAMAGE.
-// */
-//
-//#include <stm32l0xx_hal.h>
-//#include "sensirion_common.h"
-//#include "sensirion_config.h"
-//#include "sensirion_i2c_hal.h"
-////#include <usart.h>
-//#include <gpio.h>
-//#include <stdio.h>
-//
-///**
-// * @brief Clock configuration
-// *
-// */
-//void SystemClock_Config(void);
-//
-///**
-// * @brief Global buffer to format trace messages
-// *
-// */
-//uint8_t msgbuf[256];
-//
-//
-///**
-// * Implemenation of assert handler that is used in the hal initialisation methods.
-// */
-//void assert_failed(uint8_t* file, uint32_t line)
-//{
-//    while(1); // stop execution
-//}
-//
-//
-//
-///**
-// * Use external I2C instance that's already configured by the main system
-// * instead of creating a new one
-// */
-//extern I2C_HandleTypeDef hi2c1;
-//
-///**
-// * Initialize all hard- and software components that are needed for the I2C
-// * communication.
-// *
-// * Note: I2C1 is already initialized by the main system, so we don't need
-// * to reinitialize it here. This prevents overwriting the proper configuration.
-// */
-//void sensirion_i2c_hal_init(void) {
-//    // I2C1 is already properly initialized by MX_I2C1_Init() in main
-//    // No additional initialization needed
-//}
-//
-//
-///**
-// * Release all resources initialized by sensirion_i2c_hal_init().
-// */
-//void sensirion_i2c_hal_free(void) {
-//}
-//
-///**
-// * Execute one read transaction on the I2C bus, reading a given number of bytes.
-// * If the device does not acknowledge the read command, an error shall be
-// * returned.
-// *
-// * @param address 7-bit I2C address to read from
-// * @param data    pointer to the buffer where the data is to be stored
-// * @param count   number of bytes to read from I2C and store in the buffer
-// * @returns 0 on success, error code otherwise
-// */
-//int8_t sensirion_i2c_hal_read(uint8_t address, uint8_t* data, uint8_t count) {
-//    return (int8_t)HAL_I2C_Master_Receive(&hi2c1, (uint16_t)(address<<1),
-//                                          data, count, 100);
-//}
-//
-///**
-// * Execute one write transaction on the I2C bus, sending a given number of
-// * bytes. The bytes in the supplied buffer must be sent to the given address. If
-// * the slave device does not acknowledge any of the bytes, an error shall be
-// * returned.
-// *
-// * @param address 7-bit I2C address to write to
-// * @param data    pointer to the buffer containing the data to write
-// * @param count   number of bytes to read from the buffer and send over I2C
-// * @returns 0 on success, error code otherwise
-// */
-//int8_t sensirion_i2c_hal_write(uint8_t address, const uint8_t* data,
-//                               uint8_t count) {
-//    return (int8_t)HAL_I2C_Master_Transmit(&hi2c1, (uint16_t)(address<<1),
-//                                           (uint8_t*)data, count, 100);
-//}
-//
-///**
-// * Sleep for a given number of microseconds. The function should delay the
-// * execution for at least the given time, but may also sleep longer.
-// *
-// * @param useconds the sleep time in microseconds
-// */
-//void sensirion_i2c_hal_sleep_usec(uint32_t useconds) {
-//    uint32_t msec = useconds / 1000;
-//    if (useconds % 1000 > 0) {
-//        msec++;
-//    }
-//
-//    /*
-//     * Increment by 1 if STM32F1 driver version less than 1.1.1
-//     * Old firmwares of STM32F1 sleep 1ms shorter than specified in HAL_Delay.
-//     * This was fixed with firmware 1.6 (driver version 1.1.1), so we have to
-//     * fix it ourselves for older firmwares
-//     */
-//    if (HAL_GetHalVersion() < 0x01010100) {
-//        msec++;
-//    }
-//
-//    HAL_Delay(msec);
-//}
-//
-//
+#include <stm32l0xx_hal.h>
+#include "sensirion_common.h"
+#include "sensirion_config.h"
+#include "sensirion_i2c_hal.h"
+
+extern I2C_HandleTypeDef hi2c1;
+
+uint8_t msgbuf[256];
+
+void sensirion_i2c_hal_init(void) {
+    /* I2C is initialized elsewhere */
+}
+
+void sensirion_i2c_hal_free(void) {
+    /* nothing to free */
+}
+
+int8_t sensirion_i2c_hal_read(uint8_t address, uint8_t* data, uint8_t count) {
+    return (int8_t)HAL_I2C_Master_Receive(&hi2c1, (uint16_t)(address << 1), data, count, 100);
+}
+
+int8_t sensirion_i2c_hal_write(uint8_t address, const uint8_t* data, uint8_t count) {
+    return (int8_t)HAL_I2C_Master_Transmit(&hi2c1, (uint16_t)(address << 1), (uint8_t*)data, count, 100);
+}
+
+void sensirion_i2c_hal_sleep_usec(uint32_t useconds) {
+    uint32_t msec = useconds / 1000;
+    if (useconds % 1000 > 0) {
+        msec++;
+    }
+    if (HAL_GetHalVersion() < 0x01010100) {
+        msec++;
+    }
+    HAL_Delay(msec);
+}
