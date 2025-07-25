@@ -356,6 +356,9 @@ int main(void)
   /* USER CODE BEGIN 2 */
   RTC_WakeUp_Init();
 
+  scan_i2c_bus();
+  sensor_init_and_read();
+
   join_lora_network(&lora);
   /* USER CODE END 2 */
 
@@ -404,9 +407,6 @@ int main(void)
 	  		// Reinit WakeUp timer (MUST be outside the callback!)
 	  		RTC_WakeUp_Init();
 	  		ConsolePrintf("RTC Wake-Up Timer reinitialized\r\n");
-
-	  		scan_i2c_bus();
-	  		sensor_init_and_read();
 
             char response[32];
             ATC_SendReceive(&lora, "AT\r\n", strlen("AT\r\n"), response, sizeof(response), 5000, "OK");
