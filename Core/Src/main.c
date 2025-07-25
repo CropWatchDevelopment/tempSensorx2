@@ -80,6 +80,8 @@ typedef enum {
 typedef struct {
     UART_HandleTypeDef *huart; // Pointer to UART handle (e.g., &huart2)
 } ATC_HandleTypeDef;
+
+ATC_HandleTypeDef lora;
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
@@ -136,7 +138,7 @@ LoRaWAN_Error_t send_data_and_get_response(ATC_HandleTypeDef *lora, const char *
         return LORAWAN_ERROR_INVALID_PARAM;
     }
 
-    ATC_SendReceive(lora, "AT\r\n", strlen(4), response, response_size, timeout_ms, expected_response);
+    ATC_SendReceive(lora, "AT\r\n", 4, response, response_size, timeout_ms, expected_response);
     HAL_Delay(300);
     int result = ATC_SendReceive(lora, data, strlen(data), response, response_size, timeout_ms, expected_response);
 
@@ -306,9 +308,6 @@ int main(void)
   /* USER CODE BEGIN 2 */
   RTC_WakeUp_Init();
 
-  ATC_HandleTypeDef lora;
-  lora.huart = &huart2;
-
   join_lora_network(&lora);
   /* USER CODE END 2 */
 
@@ -352,12 +351,19 @@ int main(void)
 	  		ConsolePrintf("UART reinitialized\r\n");
 
 	  		MX_USART2_UART_Init();
+	  		lora.huart = &huart2;
 	  		ConsolePrintf("LPUART1 (lora) reinitialized\r\n");
 
 	  		// Reinit WakeUp timer (MUST be outside the callback!)
 	  		RTC_WakeUp_Init();
 	  		ConsolePrintf("RTC Wake-Up Timer reinitialized\r\n");
-	  		join_lora_network(&lora);
+
+	  		char* response = NULL;
+	  		ATC_SendReceive(&lora, "AT\r\n", 4, response, 100, 5000, "OK");
+
+	  		char* response2 = NULL;
+	  		ATC_SendReceive(&lora, "AT+SEND \"AA\"\r\n", 4, response2, 100, 5000, "OK");
+	  		__NOP();
 
   }
   /* USER CODE END 3 */
@@ -565,7 +571,7 @@ static void MX_USART2_UART_Init(void)
     Error_Handler();
   }
   /* USER CODE BEGIN USART2_Init 2 */
-
+  lora.huart = &huart2;
   /* USER CODE END USART2_Init 2 */
 
 }
