@@ -60,8 +60,8 @@ all: main-build
 main-build: CWH.elf secondary-outputs
 
 # Tool invocations
-CWH.elf CWH.map: $(OBJS) $(USER_OBJS) /home/kevin/STM32CubeIDE/workspace_eren/CWH/STM32L073RZTX_FLASH.ld makefile objects.list $(OPTIONAL_TOOL_DEPS)
-	arm-none-eabi-gcc -o "CWH.elf" @"objects.list" $(USER_OBJS) $(LIBS) -mcpu=cortex-m0plus -T"/home/kevin/STM32CubeIDE/workspace_eren/CWH/STM32L073RZTX_FLASH.ld" --specs=nosys.specs -Wl,-Map="CWH.map" -Wl,--gc-sections -static --specs=nano.specs -mfloat-abi=soft -mthumb -Wl,--start-group -lc -lm -Wl,--end-group
+CWH.elf CWH.map: $(OBJS) $(USER_OBJS) /home/kevin/source/repos/cropwatch/tempSensorx2/STM32L073RZTX_FLASH.ld makefile objects.list $(OPTIONAL_TOOL_DEPS)
+	arm-none-eabi-gcc -o "CWH.elf" @"objects.list" $(USER_OBJS) $(LIBS) -mcpu=cortex-m0plus -T"/home/kevin/source/repos/cropwatch/tempSensorx2/STM32L073RZTX_FLASH.ld" --specs=nosys.specs -Wl,-Map="CWH.map" -Wl,--gc-sections -static --specs=nano.specs -mfloat-abi=soft -mthumb -Wl,--start-group -lc -lm -Wl,--end-group
 	@echo 'Finished building target: $@'
 	@echo ' '
 
