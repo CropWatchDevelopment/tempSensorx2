@@ -203,7 +203,7 @@ uint32_t ReadBattery_mV(void)
     HAL_Delay(300);
 
     // 4) Sample the divider output (VBAT/2)
-    sConfig.Channel = ADC_CHANNEL_4;              // ← adjust to your sense pin
+    sConfig.Channel = ADC_CHANNEL_0;              // PA0 is connected to the divider output
     sConfig.Rank    = ADC_RANK_CHANNEL_NUMBER;
     HAL_ADC_ConfigChannel(&hadc, &sConfig);
 
@@ -303,6 +303,8 @@ int main(void)
     HAL_UART_DeInit(&huart1);
     // De-init LPUART1 (LoRaWAN UART)
     HAL_UART_DeInit(&hlpuart1);
+    // De-init ADC to minimize current during Stop mode
+    HAL_ADC_DeInit(&hadc);
 
     // Disable LPUART wake-up from Stop mode
     __HAL_UART_DISABLE_IT(&hlpuart1, UART_IT_RXNE);                    // Disable RXNE interrupt
@@ -334,9 +336,20 @@ int main(void)
     MX_LPUART1_UART_Init();
     ConsolePrintf("LPUART1 (lora) reinitialized\r\n");
 
+    // Reinitialize ADC for battery measurement and any future use
+    MX_ADC_Init();
+    ConsolePrintf("ADC reinitialized\r\n");
+
     // Reinit WakeUp timer (MUST be outside the callback!)
     RTC_WakeUp_Init();
     ConsolePrintf("RTC Wake-Up Timer reinitialized\r\n");
+
+    // Measure battery voltage after waking up
+    HAL_GPIO_WritePin(GPIOB, VBAT_MEAS_EN_Pin, GPIO_PIN_SET);
+    HAL_Delay(300);                          // allow divider to settle
+    batt = ReadBattery_mV();
+    HAL_GPIO_WritePin(GPIOB, VBAT_MEAS_EN_Pin, GPIO_PIN_RESET);
+    ConsolePrintf("Battery voltage: %lu mV\r\n", batt);
 
 
     HAL_GPIO_WritePin(I2C_ENABLE_GPIO_Port, I2C_ENABLE_Pin, GPIO_PIN_SET);
