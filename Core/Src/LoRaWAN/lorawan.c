@@ -79,22 +79,34 @@ LoRaWAN_Error_t LoRaWAN_Join(ATC_HandleTypeDef *lora)
     return LORAWAN_ERROR_UNEXPECTED_RESPONSE;
 }
 
-LoRaWAN_Error_t LoRaWAN_SendHex(ATC_HandleTypeDef *lora, const uint8_t *payload, size_t length)
+LoRaWAN_Error_t LoRaWAN_SendHex(ATC_HandleTypeDef *lora, const uint8_t *payload, size_t length, int fPort)
 {
-    if (!lora || !lora->huart || !payload || length == 0) {
+    if (!lora || !lora->huart || !payload || length == 0 || fPort < 1 || fPort > 198) {
         return LORAWAN_ERROR_INVALID_PARAM;
     }
 
+    // Step 1: Set the fPort using ATS
+    char port_command[32];
+    snprintf(port_command, sizeof(port_command), "ATS 629=%d\r\n", fPort);
+
+    char response[64];
+    LoRaWAN_Error_t port_status = send_data_and_get_response(lora, port_command, response, sizeof(response), 3000, "OK");
+    if (port_status != LORAWAN_ERROR_OK) {
+        return port_status;
+    }
+
+    // Step 2: Convert payload to hex
     char hex[length * 2 + 1];
     for (size_t i = 0; i < length; ++i) {
         sprintf(&hex[i * 2], "%02X", payload[i]);
     }
     hex[length * 2] = '\0';
 
-    char command[length * 2 + 12];
+    // Step 3: Build AT+SEND command
+    char command[length * 2 + 16];
     snprintf(command, sizeof(command), "AT+SEND \"%s\"\r\n", hex);
 
-    char response[64];
+    // Step 4: Send the command
     return send_data_and_get_response(lora, command, response, sizeof(response), 5000, "OK");
 }
 

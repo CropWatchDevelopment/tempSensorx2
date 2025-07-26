@@ -276,6 +276,7 @@ int main(void)
   MX_LPUART1_UART_Init();
   MX_ADC_Init();
   /* USER CODE BEGIN 2 */
+  HAL_ADC_DeInit(&hadc);
   RTC_WakeUp_Init();
 
 //  /* Scan the I2C bus and read sensors once at startup */
@@ -358,7 +359,7 @@ int main(void)
 		payload[0] = (uint8_t)(calculated_temp >> 8);     // high byte
 		payload[1] = (uint8_t)(calculated_temp & 0xFF);   // low byte
 		payload[2] = calculated_hum;
-		LoRaWAN_SendHex(&lora, payload, 3);
+		LoRaWAN_SendHex(&lora, payload, 3, 1);
     }
     else
     {

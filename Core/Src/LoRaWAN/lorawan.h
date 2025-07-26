@@ -20,6 +20,6 @@ typedef struct {
 
 LoRaWAN_Error_t send_data_and_get_response(ATC_HandleTypeDef *lora, const char *data, char *response, uint32_t response_size, uint32_t timeout_ms, const char *expected_response);
 LoRaWAN_Error_t LoRaWAN_Join(ATC_HandleTypeDef *lora);
-LoRaWAN_Error_t LoRaWAN_SendHex(ATC_HandleTypeDef *lora, const uint8_t *payload, size_t length);
+LoRaWAN_Error_t LoRaWAN_SendHex(ATC_HandleTypeDef *lora, const uint8_t *payload, size_t length, int fPort);
 
 #endif // LORAWAN_H
