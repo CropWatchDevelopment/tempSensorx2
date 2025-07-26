@@ -58,6 +58,16 @@ int sensor_init_and_read(void)
         error = sht4x_measure_high_precision_ticks(&temp_ticks_2, &hum_ticks_2);
     }
 
+    uint16_t calculated_temp_1 = (temp_ticks_1 / 100) + 55;
+    uint16_t calculated_temp_2 = (temp_ticks_2 / 100) + 55;
+
+    uint8_t calculated_hum_1 = (hum_ticks_1 / 100);
+    uint8_t calculated_hum_2 = (hum_ticks_2 / 100);
+
+
+    int temp_diff = calculated_temp_1 - calculated_temp_2;
+    int hum_diff = calculated_hum_1 - calculated_hum_2;
+
     if (error) {
         return -200;
     }

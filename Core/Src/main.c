@@ -1,20 +1,20 @@
 /* USER CODE BEGIN Header */
 /**
-  ******************************************************************************
-  * @file           : main.c
-  * @brief          : Main program body
-  ******************************************************************************
-  * @attention
-  *
-  * Copyright (c) 2025 STMicroelectronics.
-  * All rights reserved.
-  *
-  * This software is licensed under terms that can be found in the LICENSE file
-  * in the root directory of this software component.
-  * If no LICENSE file comes with this software, it is provided AS-IS.
-  *
-  ******************************************************************************
-  */
+ ******************************************************************************
+ * @file           : main.c
+ * @brief          : Main program body
+ ******************************************************************************
+ * @attention
+ *
+ * Copyright (c) 2025 STMicroelectronics.
+ * All rights reserved.
+ *
+ * This software is licensed under terms that can be found in the LICENSE file
+ * in the root directory of this software component.
+ * If no LICENSE file comes with this software, it is provided AS-IS.
+ *
+ ******************************************************************************
+ */
 /* USER CODE END Header */
 /* Includes ------------------------------------------------------------------*/
 #include "main.h"
@@ -27,6 +27,7 @@
 #include <stdbool.h> // For bool, true, false
 #include "sensirion/sensirion.h"
 #include "LoRaWAN/lorawan.h"
+#include "utils/sensor_payload.h"
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -36,23 +37,27 @@
 
 /* Private define ------------------------------------------------------------*/
 /* USER CODE BEGIN PD */
-#define AT_RESPONSE_BUFFER_SIZE 		256
-#define DEV_EUI_LENGTH          		16
-#define APP_EUI_LENGTH          		16
-#define APP_KEY_LENGTH          		32
-#define AS923_1_FREQ_MIN        		923200000
-#define AS923_1_FREQ_MAX        		923400000
-#define DEFAULT_FREQ            		923200000
-#define JAPAN_REGION            		9
-#define TTN_SUBBAND_CHANNEL     		0
-#define TX_POWER                		11
-#define DATA_RATE               		0
-#define JOIN_TIMEOUT_MS         		10000
+#define AT_RESPONSE_BUFFER_SIZE 256
+#define DEV_EUI_LENGTH 16
+#define APP_EUI_LENGTH 16
+#define APP_KEY_LENGTH 32
+#define AS923_1_FREQ_MIN 923200000
+#define AS923_1_FREQ_MAX 923400000
+#define DEFAULT_FREQ 923200000
+#define JAPAN_REGION 9
+#define TTN_SUBBAND_CHANNEL 0
+#define TX_POWER 11
+#define DATA_RATE 0
+#define JOIN_TIMEOUT_MS 10000
+
+// LORAWAN DEFINES
+#define AT_CMD_PREFIX "AT+SEND \""
+#define AT_CMD_SUFFIX "\"\r\n"
 
 // I2C DEFINES
-#define SHT40_I2C_ADDR 					(0x44 << 1) 				// SHT40 I2C address (shifted for HAL)
-#define SHT40_MEASURE_HIGH_PRECISION 	0xFD 						// High-precision measurement command
-#define TIMEOUT 						100 						// I2C timeout in ms
+#define SHT40_I2C_ADDR (0x44 << 1)        // SHT40 I2C address (shifted for HAL)
+#define SHT40_MEASURE_HIGH_PRECISION 0xFD // High-precision measurement command
+#define TIMEOUT 100                       // I2C timeout in ms
 /* USER CODE END PD */
 
 /* Private macro -------------------------------------------------------------*/
@@ -85,142 +90,69 @@ void ConsolePrintf(const char *format, ...);
 
 /* Private user code ---------------------------------------------------------*/
 /* USER CODE BEGIN 0 */
-
-
-
-
-
-
-HAL_StatusTypeDef SHT40_Read(int16_t *temperature, int16_t *humidity)
-{
-    ConsolePrintf("Starting SHT40 read operation\r\n");
-
-    uint8_t tx_data[1] = {SHT40_MEASURE_HIGH_PRECISION};
-    uint8_t rx_data[6]; // 6 bytes: 2 temp, 1 CRC, 2 hum, 1 CRC
-
-    // Send measurement command
-    ConsolePrintf("Sending SHT40 measurement command (0x%02X)\r\n", SHT40_MEASURE_HIGH_PRECISION);
-    HAL_StatusTypeDef status = HAL_I2C_Master_Transmit(&hi2c1, 0x44, tx_data, 1, TIMEOUT);
-    if (status != HAL_OK)
-    {
-        ConsolePrintf("SHT40 I2C transmit failed, status: %d\r\n", status);
-        return status;
-    }
-    ConsolePrintf("SHT40 measurement command sent\r\n");
-
-    // Wait for measurement (~8.2ms for high precision)
-    ConsolePrintf("Waiting 10ms for SHT40 measurement\r\n");
-    HAL_Delay(10);
-
-    // Read 6 bytes (temp + CRC + humidity + CRC)
-    ConsolePrintf("Reading 6 bytes from SHT40\r\n");
-    status = HAL_I2C_Master_Receive(&hi2c1, SHT40_I2C_ADDR, rx_data, 6, TIMEOUT);
-    if (status != HAL_OK)
-    {
-        ConsolePrintf("SHT40 I2C receive failed, status: %d\r\n", status);
-        return status;
-    }
-    ConsolePrintf("SHT40 data received: %02X %02X %02X %02X %02X %02X\r\n",
-                  rx_data[0], rx_data[1], rx_data[2], rx_data[3], rx_data[4], rx_data[5]);
-
-    // Convert temperature to �C*10
-    uint16_t temp_raw = (rx_data[0] << 8) | rx_data[1];
-    *temperature = (int16_t)((-45.0f + 175.0f * ((float)temp_raw / 65535.0f)) * 10);
-    ConsolePrintf("Raw temperature: %u, Converted: %d (0.1�C)\r\n", temp_raw, *temperature);
-
-    // Convert humidity to %RH*10
-    uint16_t hum_raw = (rx_data[3] << 8) | rx_data[4];
-    *humidity = (int16_t)((-6.0f + 125.0f * ((float)hum_raw / 65535.0f)) * 10);
-    ConsolePrintf("Raw humidity: %u, Converted: %d (0.1%%RH)\r\n", hum_raw, *humidity);
-
-    // Optional: CRC check (rx_data[2] for temp, rx_data[5] for humidity)
-    // Add if needed (see CRC function below)
-    ConsolePrintf("SHT40 read completed successfully\r\n");
-
-    return HAL_OK;
-}
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 void RTC_IRQHandler(void)
 {
-    HAL_RTCEx_WakeUpTimerIRQHandler(&hrtc);
+  HAL_RTCEx_WakeUpTimerIRQHandler(&hrtc);
 }
 
 void RTC_WakeUp_Init(void)
 {
-	ConsolePrintf("Starting RTC Wake-Up Timer configuration\r\n");
+  ConsolePrintf("Starting RTC Wake-Up Timer configuration\r\n");
 
-	// Disable the Wake-Up Timer before configuring
-	HAL_RTCEx_DeactivateWakeUpTimer(&hrtc);
-	ConsolePrintf("RTC Wake-Up Timer disabled\r\n");
+  // Disable the Wake-Up Timer before configuring
+  HAL_RTCEx_DeactivateWakeUpTimer(&hrtc);
+  ConsolePrintf("RTC Wake-Up Timer disabled\r\n");
 
-	// Configure Wake-Up Timer for 60 seconds using LSI (~40 kHz)
-	// With AsynchPrediv = 127, SynchPrediv = 255: CK_SPRE = 40,000 / (128 * 256) = ~1.22 Hz
-	// For ~60 seconds: WakeUpCounter = (60 * 1.22) - 1 = ~72
-	if (HAL_RTCEx_SetWakeUpTimer_IT(&hrtc, 59, RTC_WAKEUPCLOCK_CK_SPRE_16BITS) != HAL_OK)
-	{
-		ConsolePrintf("RTC Wake-Up Timer Init Failed\r\n");
+  // Configure Wake-Up Timer for 60 seconds using LSI (~40 kHz)
+  // With AsynchPrediv = 127, SynchPrediv = 255: CK_SPRE = 40,000 / (128 * 256) = ~1.22 Hz
+  // For ~60 seconds: WakeUpCounter = (60 * 1.22) - 1 = ~72
+  if (HAL_RTCEx_SetWakeUpTimer_IT(&hrtc, 59, RTC_WAKEUPCLOCK_CK_SPRE_16BITS) != HAL_OK)
+  {
+    ConsolePrintf("RTC Wake-Up Timer Init Failed\r\n");
+  }
+  else
+  {
+    ConsolePrintf("RTC Wake-Up Timer Initialized for ~60 seconds\r\n");
+  }
 
-	}
-	else
-	{
-		ConsolePrintf("RTC Wake-Up Timer Initialized for ~60 seconds\r\n");
-	}
-
-	// Enable RTC Wake-Up interrupt in NVIC
-	HAL_NVIC_SetPriority(RTC_IRQn, 0, 0);
-	HAL_NVIC_EnableIRQ(RTC_IRQn);
-	ConsolePrintf("RTC Wake-Up interrupt enabled in NVIC\r\n");
+  // Enable RTC Wake-Up interrupt in NVIC
+  HAL_NVIC_SetPriority(RTC_IRQn, 0, 0);
+  HAL_NVIC_EnableIRQ(RTC_IRQn);
+  ConsolePrintf("RTC Wake-Up interrupt enabled in NVIC\r\n");
 }
 
 void HAL_RTCEx_WakeUpTimerEventCallback(RTC_HandleTypeDef *hrtc)
 {
-    // Reconfigure system clock after wake-up
-    SystemClock_Config();
+  // Reconfigure system clock after wake-up
+  SystemClock_Config();
 
-    // Print message
-    ConsolePrintf("Woke up at %s\r\n", "1-minute interval");
+  // Print message
+  ConsolePrintf("Woke up at %s\r\n", "1-minute interval");
 }
 
 void Enter_Stop_Mode(void)
 {
-        ConsolePrintf("Preparing to enter Stop mode\r\n");
+  ConsolePrintf("Preparing to enter Stop mode\r\n");
 
-    // Clear Wake-Up flag
-    __HAL_RTC_WAKEUPTIMER_CLEAR_FLAG(&hrtc, RTC_FLAG_WUTF);
-    ConsolePrintf("RTC Wake-Up flag cleared\r\n");
+  // Clear Wake-Up flag
+  __HAL_RTC_WAKEUPTIMER_CLEAR_FLAG(&hrtc, RTC_FLAG_WUTF);
+  ConsolePrintf("RTC Wake-Up flag cleared\r\n");
 
-    // Enter Stop mode (low-power mode)
-    ConsolePrintf("Entering Stop mode\r\n");
-    /* Suspend SysTick to prevent it from waking up the MCU immediately */
-    HAL_SuspendTick();
-    HAL_PWR_EnterSTOPMode(PWR_LOWPOWERREGULATOR_ON, PWR_STOPENTRY_WFI);
-    /* Resume SysTick after waking up */
-    HAL_ResumeTick();
-    ConsolePrintf("Exited Stop mode\r\n");
+  // Enter Stop mode (low-power mode)
+  ConsolePrintf("Entering Stop mode\r\n");
+  /* Suspend SysTick to prevent it from waking up the MCU immediately */
+  HAL_SuspendTick();
+  HAL_PWR_EnterSTOPMode(PWR_LOWPOWERREGULATOR_ON, PWR_STOPENTRY_WFI);
+  /* Resume SysTick after waking up */
+  HAL_ResumeTick();
+  ConsolePrintf("Exited Stop mode\r\n");
 }
 /* USER CODE END 0 */
 
 /**
-  * @brief  The application entry point.
-  * @retval int
-  */
+ * @brief  The application entry point.
+ * @retval int
+ */
 int main(void)
 {
 
@@ -268,63 +200,62 @@ int main(void)
     /* USER CODE END WHILE */
 
     /* USER CODE BEGIN 3 */
-	  ConsolePrintf("Going to sleep...\r\n");
+    ConsolePrintf("Going to sleep...\r\n");
 
-	  		HAL_I2C_DeInit(&hi2c1);
-	  		HAL_UART_DeInit(&huart1);
-	  		// De-init LPUART1 (LoRaWAN UART)
-	  		HAL_UART_DeInit(&hlpuart1);
+    HAL_I2C_DeInit(&hi2c1);
+    HAL_UART_DeInit(&huart1);
+    // De-init LPUART1 (LoRaWAN UART)
+    HAL_UART_DeInit(&hlpuart1);
 
-	  		// Disable LPUART wake-up from Stop mode
-	  		__HAL_UART_DISABLE_IT(&hlpuart1, UART_IT_RXNE); // Disable RXNE interrupt
-	  		__HAL_UART_DISABLE_IT(&hlpuart1, UART_IT_IDLE); // Disable IDLE interrupt
-	  		__HAL_UART_CLEAR_FLAG(&hlpuart1, UART_FLAG_RXNE | UART_FLAG_IDLE); // Clear any pending flags
+    // Disable LPUART wake-up from Stop mode
+    __HAL_UART_DISABLE_IT(&hlpuart1, UART_IT_RXNE);                    // Disable RXNE interrupt
+    __HAL_UART_DISABLE_IT(&hlpuart1, UART_IT_IDLE);                    // Disable IDLE interrupt
+    __HAL_UART_CLEAR_FLAG(&hlpuart1, UART_FLAG_RXNE | UART_FLAG_IDLE); // Clear any pending flags
 
-	  		__HAL_UART_DISABLE_IT(&huart1, UART_IT_RXNE); // Disable RXNE interrupt
-	  		__HAL_UART_DISABLE_IT(&huart1, UART_IT_IDLE); // Disable IDLE interrupt
-	  		__HAL_UART_CLEAR_FLAG(&huart1, UART_FLAG_RXNE | UART_FLAG_IDLE); // Clear any pending flags
+    __HAL_UART_DISABLE_IT(&huart1, UART_IT_RXNE);                    // Disable RXNE interrupt
+    __HAL_UART_DISABLE_IT(&huart1, UART_IT_IDLE);                    // Disable IDLE interrupt
+    __HAL_UART_CLEAR_FLAG(&huart1, UART_FLAG_RXNE | UART_FLAG_IDLE); // Clear any pending flags
 
+    // Enter Stop mode
+    Enter_Stop_Mode(); // Wakes up via RTC interrupt
 
-	  		// Enter Stop mode
-	  		Enter_Stop_Mode();  // Wakes up via RTC interrupt
+    // === Code resumes after wake-up ===
+    ConsolePrintf("Resumed after wake-up\r\n");
 
-	  		// === Code resumes after wake-up ===
-	  		ConsolePrintf("Resumed after wake-up\r\n");
+    // Reconfigure clocks
+    SystemClock_Config();
+    ConsolePrintf("System clock reconfigured\r\n");
 
-                        // Reconfigure clocks
-                        SystemClock_Config();
-                        ConsolePrintf("System clock reconfigured\r\n");
+    // Reinit I2C peripheral
+    MX_I2C1_Init();
+    ConsolePrintf("I2C1 reinitialized\r\n");
 
-                        // Reinit I2C peripheral
-                        MX_I2C1_Init();
-                        ConsolePrintf("I2C1 reinitialized\r\n");
+    // Reinit UART
+    MX_USART1_UART_Init();
+    ConsolePrintf("UART reinitialized\r\n");
 
-                        // Reinit UART
-                        MX_USART1_UART_Init();
-                        ConsolePrintf("UART reinitialized\r\n");
+    MX_LPUART1_UART_Init();
+    ConsolePrintf("LPUART1 (lora) reinitialized\r\n");
 
-	  		MX_LPUART1_UART_Init();
-	  		ConsolePrintf("LPUART1 (lora) reinitialized\r\n");
+    // Reinit WakeUp timer (MUST be outside the callback!)
+    RTC_WakeUp_Init();
+    ConsolePrintf("RTC Wake-Up Timer reinitialized\r\n");
 
-	  		// Reinit WakeUp timer (MUST be outside the callback!)
-	  		RTC_WakeUp_Init();
-	  		ConsolePrintf("RTC Wake-Up Timer reinitialized\r\n");
+    scan_i2c_bus();
+    sensor_init_and_read();
 
-	  		scan_i2c_bus();
-	  		sensor_init_and_read();
-
-            uint8_t payload[] = {0xAA, 0xBB};
-            LoRaWAN_SendHex(&lora, payload, sizeof(payload));
-            __NOP();
-
+    char hex_data[16];
+    char response[64];
+    sprintf(hex_data, "AT+SEND \"%04X%04X\"\r\n", temp_ticks_1, hum_ticks_1);
+    send_data_and_get_response(&lora, hex_data, response, sizeof(response), 5000, "OK");
   }
   /* USER CODE END 3 */
 }
 
 /**
-  * @brief System Clock Configuration
-  * @retval None
-  */
+ * @brief System Clock Configuration
+ * @retval None
+ */
 void SystemClock_Config(void)
 {
   RCC_OscInitTypeDef RCC_OscInitStruct = {0};
@@ -332,13 +263,13 @@ void SystemClock_Config(void)
   RCC_PeriphCLKInitTypeDef PeriphClkInit = {0};
 
   /** Configure the main internal regulator output voltage
-  */
+   */
   __HAL_PWR_VOLTAGESCALING_CONFIG(PWR_REGULATOR_VOLTAGE_SCALE1);
 
   /** Initializes the RCC Oscillators according to the specified parameters
-  * in the RCC_OscInitTypeDef structure.
-  */
-  RCC_OscInitStruct.OscillatorType = RCC_OSCILLATORTYPE_LSI|RCC_OSCILLATORTYPE_MSI;
+   * in the RCC_OscInitTypeDef structure.
+   */
+  RCC_OscInitStruct.OscillatorType = RCC_OSCILLATORTYPE_LSI | RCC_OSCILLATORTYPE_MSI;
   RCC_OscInitStruct.LSIState = RCC_LSI_ON;
   RCC_OscInitStruct.MSIState = RCC_MSI_ON;
   RCC_OscInitStruct.MSICalibrationValue = 0;
@@ -350,9 +281,8 @@ void SystemClock_Config(void)
   }
 
   /** Initializes the CPU, AHB and APB buses clocks
-  */
-  RCC_ClkInitStruct.ClockType = RCC_CLOCKTYPE_HCLK|RCC_CLOCKTYPE_SYSCLK
-                              |RCC_CLOCKTYPE_PCLK1|RCC_CLOCKTYPE_PCLK2;
+   */
+  RCC_ClkInitStruct.ClockType = RCC_CLOCKTYPE_HCLK | RCC_CLOCKTYPE_SYSCLK | RCC_CLOCKTYPE_PCLK1 | RCC_CLOCKTYPE_PCLK2;
   RCC_ClkInitStruct.SYSCLKSource = RCC_SYSCLKSOURCE_MSI;
   RCC_ClkInitStruct.AHBCLKDivider = RCC_SYSCLK_DIV1;
   RCC_ClkInitStruct.APB1CLKDivider = RCC_HCLK_DIV1;
@@ -362,8 +292,7 @@ void SystemClock_Config(void)
   {
     Error_Handler();
   }
-  PeriphClkInit.PeriphClockSelection = RCC_PERIPHCLK_USART1|RCC_PERIPHCLK_LPUART1
-                              |RCC_PERIPHCLK_I2C1|RCC_PERIPHCLK_RTC;
+  PeriphClkInit.PeriphClockSelection = RCC_PERIPHCLK_USART1 | RCC_PERIPHCLK_LPUART1 | RCC_PERIPHCLK_I2C1 | RCC_PERIPHCLK_RTC;
   PeriphClkInit.Usart1ClockSelection = RCC_USART1CLKSOURCE_PCLK2;
   PeriphClkInit.Lpuart1ClockSelection = RCC_LPUART1CLKSOURCE_PCLK1;
   PeriphClkInit.I2c1ClockSelection = RCC_I2C1CLKSOURCE_PCLK1;
@@ -375,10 +304,10 @@ void SystemClock_Config(void)
 }
 
 /**
-  * @brief I2C1 Initialization Function
-  * @param None
-  * @retval None
-  */
+ * @brief I2C1 Initialization Function
+ * @param None
+ * @retval None
+ */
 static void MX_I2C1_Init(void)
 {
 
@@ -404,14 +333,14 @@ static void MX_I2C1_Init(void)
   }
 
   /** Configure Analogue filter
-  */
+   */
   if (HAL_I2CEx_ConfigAnalogFilter(&hi2c1, I2C_ANALOGFILTER_ENABLE) != HAL_OK)
   {
     Error_Handler();
   }
 
   /** Configure Digital filter
-  */
+   */
   if (HAL_I2CEx_ConfigDigitalFilter(&hi2c1, 0) != HAL_OK)
   {
     Error_Handler();
@@ -419,14 +348,13 @@ static void MX_I2C1_Init(void)
   /* USER CODE BEGIN I2C1_Init 2 */
 
   /* USER CODE END I2C1_Init 2 */
-
 }
 
 /**
-  * @brief LPUART1 Initialization Function
-  * @param None
-  * @retval None
-  */
+ * @brief LPUART1 Initialization Function
+ * @param None
+ * @retval None
+ */
 static void MX_LPUART1_UART_Init(void)
 {
 
@@ -453,14 +381,13 @@ static void MX_LPUART1_UART_Init(void)
   /* USER CODE BEGIN LPUART1_Init 2 */
   lora.huart = &hlpuart1;
   /* USER CODE END LPUART1_Init 2 */
-
 }
 
 /**
-  * @brief USART1 Initialization Function
-  * @param None
-  * @retval None
-  */
+ * @brief USART1 Initialization Function
+ * @param None
+ * @retval None
+ */
 static void MX_USART1_UART_Init(void)
 {
 
@@ -488,14 +415,13 @@ static void MX_USART1_UART_Init(void)
   /* USER CODE BEGIN USART1_Init 2 */
   ConsolePrintf("USART1 (DBG) Cnfigured\r\n");
   /* USER CODE END USART1_Init 2 */
-
 }
 
 /**
-  * @brief RTC Initialization Function
-  * @param None
-  * @retval None
-  */
+ * @brief RTC Initialization Function
+ * @param None
+ * @retval None
+ */
 static void MX_RTC_Init(void)
 {
 
@@ -508,7 +434,7 @@ static void MX_RTC_Init(void)
   /* USER CODE END RTC_Init 1 */
 
   /** Initialize RTC Only
-  */
+   */
   hrtc.Instance = RTC;
   hrtc.Init.HourFormat = RTC_HOURFORMAT_24;
   hrtc.Init.AsynchPrediv = 127;
@@ -524,14 +450,13 @@ static void MX_RTC_Init(void)
   /* USER CODE BEGIN RTC_Init 2 */
 
   /* USER CODE END RTC_Init 2 */
-
 }
 
 /**
-  * @brief GPIO Initialization Function
-  * @param None
-  * @retval None
-  */
+ * @brief GPIO Initialization Function
+ * @param None
+ * @retval None
+ */
 static void MX_GPIO_Init(void)
 {
   GPIO_InitTypeDef GPIO_InitStruct = {0};
@@ -561,39 +486,39 @@ static void MX_GPIO_Init(void)
 /* USER CODE BEGIN 4 */
 void ConsolePrintf(const char *format, ...)
 {
-    char buffer[128]; // Buffer for the original message
-    char timestamp_buffer[32]; // Buffer for timestamp
-    char final_buffer[160]; // Combined buffer (timestamp + message)
+  char buffer[128];          // Buffer for the original message
+  char timestamp_buffer[32]; // Buffer for timestamp
+  char final_buffer[160];    // Combined buffer (timestamp + message)
 
-    // Get time and date from RTC
-    RTC_DateTypeDef date;
-    RTC_TimeTypeDef time;
-    HAL_RTC_GetTime(&hrtc, &time, RTC_FORMAT_BIN);
-    HAL_RTC_GetDate(&hrtc, &date, RTC_FORMAT_BIN);
+  // Get time and date from RTC
+  RTC_DateTypeDef date;
+  RTC_TimeTypeDef time;
+  HAL_RTC_GetTime(&hrtc, &time, RTC_FORMAT_BIN);
+  HAL_RTC_GetDate(&hrtc, &date, RTC_FORMAT_BIN);
 
-    // Format timestamp as [YYYY-MM-DD HH:MM:SS]
-    snprintf(timestamp_buffer, sizeof(timestamp_buffer), "[20%02d-%02d-%02d %02d:%02d:%02d] ",
-             date.Year, date.Month, date.Date,
-             time.Hours, time.Minutes, time.Seconds);
+  // Format timestamp as [YYYY-MM-DD HH:MM:SS]
+  snprintf(timestamp_buffer, sizeof(timestamp_buffer), "[20%02d-%02d-%02d %02d:%02d:%02d] ",
+           date.Year, date.Month, date.Date,
+           time.Hours, time.Minutes, time.Seconds);
 
-    // Format the original message
-    va_list args;
-    va_start(args, format);
-    vsnprintf(buffer, sizeof(buffer), format, args);
-    va_end(args);
+  // Format the original message
+  va_list args;
+  va_start(args, format);
+  vsnprintf(buffer, sizeof(buffer), format, args);
+  va_end(args);
 
-    // Combine timestamp and message
-    snprintf(final_buffer, sizeof(final_buffer), "%s%s", timestamp_buffer, buffer);
+  // Combine timestamp and message
+  snprintf(final_buffer, sizeof(final_buffer), "%s%s", timestamp_buffer, buffer);
 
-    // Transmit the combined message
-    HAL_UART_Transmit(&huart1, (uint8_t *)final_buffer, strlen(final_buffer), HAL_MAX_DELAY);
+  // Transmit the combined message
+  HAL_UART_Transmit(&huart1, (uint8_t *)final_buffer, strlen(final_buffer), HAL_MAX_DELAY);
 }
 /* USER CODE END 4 */
 
 /**
-  * @brief  This function is executed in case of error occurrence.
-  * @retval None
-  */
+ * @brief  This function is executed in case of error occurrence.
+ * @retval None
+ */
 void Error_Handler(void)
 {
   /* USER CODE BEGIN Error_Handler_Debug */
@@ -606,12 +531,12 @@ void Error_Handler(void)
 }
 #ifdef USE_FULL_ASSERT
 /**
-  * @brief  Reports the name of the source file and the source line number
-  *         where the assert_param error has occurred.
-  * @param  file: pointer to the source file name
-  * @param  line: assert_param error line source number
-  * @retval None
-  */
+ * @brief  Reports the name of the source file and the source line number
+ *         where the assert_param error has occurred.
+ * @param  file: pointer to the source file name
+ * @param  line: assert_param error line source number
+ * @retval None
+ */
 void assert_failed(uint8_t *file, uint32_t line)
 {
   /* USER CODE BEGIN 6 */

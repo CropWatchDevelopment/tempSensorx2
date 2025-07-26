@@ -1,5 +1,5 @@
-Core/Src/sensirion/sensirion_i2c_hal.o: \
- ../Core/Src/sensirion/sensirion_i2c_hal.c \
+Core/Src/LoRaWAN/lorawan.o: ../Core/Src/LoRaWAN/lorawan.c \
+ ../Core/Src/LoRaWAN/lorawan.h ../Core/Inc/main.h \
  ../Drivers/STM32L0xx_HAL_Driver/Inc/stm32l0xx_hal.h \
  ../Core/Inc/stm32l0xx_hal_conf.h \
  ../Drivers/STM32L0xx_HAL_Driver/Inc/stm32l0xx_hal_rcc.h \
@@ -29,10 +29,9 @@ Core/Src/sensirion/sensirion_i2c_hal.o: \
  ../Drivers/STM32L0xx_HAL_Driver/Inc/stm32l0xx_hal_rtc.h \
  ../Drivers/STM32L0xx_HAL_Driver/Inc/stm32l0xx_hal_rtc_ex.h \
  ../Drivers/STM32L0xx_HAL_Driver/Inc/stm32l0xx_hal_uart.h \
- ../Drivers/STM32L0xx_HAL_Driver/Inc/stm32l0xx_hal_uart_ex.h \
- ../Core/Src/sensirion/sensirion_common.h \
- ../Core/Src/sensirion/sensirion_config.h \
- ../Core/Src/sensirion/sensirion_i2c_hal.h
+ ../Drivers/STM32L0xx_HAL_Driver/Inc/stm32l0xx_hal_uart_ex.h
+../Core/Src/LoRaWAN/lorawan.h:
+../Core/Inc/main.h:
 ../Drivers/STM32L0xx_HAL_Driver/Inc/stm32l0xx_hal.h:
 ../Core/Inc/stm32l0xx_hal_conf.h:
 ../Drivers/STM32L0xx_HAL_Driver/Inc/stm32l0xx_hal_rcc.h:
@@ -63,6 +62,3 @@ Core/Src/sensirion/sensirion_i2c_hal.o: \
 ../Drivers/STM32L0xx_HAL_Driver/Inc/stm32l0xx_hal_rtc_ex.h:
 ../Drivers/STM32L0xx_HAL_Driver/Inc/stm32l0xx_hal_uart.h:
 ../Drivers/STM32L0xx_HAL_Driver/Inc/stm32l0xx_hal_uart_ex.h:
-../Core/Src/sensirion/sensirion_common.h:
-../Core/Src/sensirion/sensirion_config.h:
-../Core/Src/sensirion/sensirion_i2c_hal.h:
