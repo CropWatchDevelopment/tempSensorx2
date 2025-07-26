@@ -223,6 +223,51 @@ uint32_t ReadBattery_mV(void)
     return VBAT_mV;  // e.g. 3700 → 3.700 V
 }
 
+/**
+ * @brief Enter Stop mode, then reinitialize peripherals and measure VBAT.
+ *
+ * This helper consolidates the low power sequence. It de-initializes
+ * peripherals (UART, I2C and ADC), enters Stop mode, then restores the
+ * peripherals and reads the battery voltage using @ref ReadBattery_mV.
+ *
+ * @retval Measured battery voltage in millivolts.
+ */
+uint32_t SleepAndMeasureBattery(void)
+{
+    uint32_t batt_mV;
+
+    /* De‑initialize peripherals before entering Stop mode */
+    HAL_I2C_DeInit(&hi2c1);
+    HAL_UART_DeInit(&huart1);
+    HAL_UART_DeInit(&hlpuart1);
+    HAL_ADC_DeInit(&hadc);
+
+    /* Disable UART interrupts that could wake the MCU */
+    __HAL_UART_DISABLE_IT(&hlpuart1, UART_IT_RXNE);
+    __HAL_UART_DISABLE_IT(&hlpuart1, UART_IT_IDLE);
+    __HAL_UART_CLEAR_FLAG(&hlpuart1, UART_FLAG_RXNE | UART_FLAG_IDLE);
+
+    __HAL_UART_DISABLE_IT(&huart1, UART_IT_RXNE);
+    __HAL_UART_DISABLE_IT(&huart1, UART_IT_IDLE);
+    __HAL_UART_CLEAR_FLAG(&huart1, UART_FLAG_RXNE | UART_FLAG_IDLE);
+
+    /* Actually enter Stop mode */
+    Enter_Stop_Mode();
+
+    /* --- MCU resumed after RTC wake‑up --- */
+    SystemClock_Config();
+    MX_I2C1_Init();
+    MX_USART1_UART_Init();
+    MX_LPUART1_UART_Init();
+    MX_ADC_Init();
+    RTC_WakeUp_Init();
+
+    /* Measure the battery voltage */
+    batt_mV = ReadBattery_mV();
+
+    return batt_mV;
+}
+
 
 
 
@@ -299,51 +344,7 @@ int main(void)
 
     /* USER CODE BEGIN 3 */
     ConsolePrintf("Going to sleep...\r\n");
-
-    HAL_I2C_DeInit(&hi2c1);
-    HAL_UART_DeInit(&huart1);
-    // De-init LPUART1 (LoRaWAN UART)
-    HAL_UART_DeInit(&hlpuart1);
-
-    // Disable LPUART wake-up from Stop mode
-    __HAL_UART_DISABLE_IT(&hlpuart1, UART_IT_RXNE);                    // Disable RXNE interrupt
-    __HAL_UART_DISABLE_IT(&hlpuart1, UART_IT_IDLE);                    // Disable IDLE interrupt
-    __HAL_UART_CLEAR_FLAG(&hlpuart1, UART_FLAG_RXNE | UART_FLAG_IDLE); // Clear any pending flags
-
-    __HAL_UART_DISABLE_IT(&huart1, UART_IT_RXNE);                    // Disable RXNE interrupt
-    __HAL_UART_DISABLE_IT(&huart1, UART_IT_IDLE);                    // Disable IDLE interrupt
-    __HAL_UART_CLEAR_FLAG(&huart1, UART_FLAG_RXNE | UART_FLAG_IDLE); // Clear any pending flags
-
-    // Enter Stop mode
-    Enter_Stop_Mode(); // Wakes up via RTC interrupt
-
-    // === Code resumes after wake-up ===
-    ConsolePrintf("Resumed after wake-up\r\n");
-
-    // Reconfigure clocks
-    SystemClock_Config();
-    ConsolePrintf("System clock reconfigured\r\n");
-
-    // Reinit I2C peripheral
-    MX_I2C1_Init();
-    ConsolePrintf("I2C1 reinitialized\r\n");
-
-    // Reinit UART
-    MX_USART1_UART_Init();
-    ConsolePrintf("UART reinitialized\r\n");
-
-    MX_LPUART1_UART_Init();
-    ConsolePrintf("LPUART1 (lora) reinitialized\r\n");
-
-    // Reinit WakeUp timer (MUST be outside the callback!)
-    RTC_WakeUp_Init();
-    ConsolePrintf("RTC Wake-Up Timer reinitialized\r\n");
-
-    // Measure battery voltage after waking up
-    HAL_GPIO_WritePin(GPIOB, VBAT_MEAS_EN_Pin, GPIO_PIN_SET);
-    HAL_Delay(300);                          // allow divider to settle
-    batt = ReadBattery_mV();
-    HAL_GPIO_WritePin(GPIOB, VBAT_MEAS_EN_Pin, GPIO_PIN_RESET);
+    batt = SleepAndMeasureBattery();
     ConsolePrintf("Battery voltage: %lu mV\r\n", batt);
 
 
