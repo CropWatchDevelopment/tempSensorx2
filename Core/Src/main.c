@@ -303,6 +303,8 @@ int main(void)
     HAL_UART_DeInit(&huart1);
     // De-init LPUART1 (LoRaWAN UART)
     HAL_UART_DeInit(&hlpuart1);
+    // De-init ADC to minimize current during Stop mode
+    HAL_ADC_DeInit(&hadc);
 
     // Disable LPUART wake-up from Stop mode
     __HAL_UART_DISABLE_IT(&hlpuart1, UART_IT_RXNE);                    // Disable RXNE interrupt
@@ -333,6 +335,10 @@ int main(void)
 
     MX_LPUART1_UART_Init();
     ConsolePrintf("LPUART1 (lora) reinitialized\r\n");
+
+    // Reinitialize ADC for battery measurement and any future use
+    MX_ADC_Init();
+    ConsolePrintf("ADC reinitialized\r\n");
 
     // Reinit WakeUp timer (MUST be outside the callback!)
     RTC_WakeUp_Init();
