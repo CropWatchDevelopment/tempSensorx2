@@ -7,10 +7,8 @@
 // External variable declarations (not definitions)
 extern bool has_sensor_1;
 extern bool has_sensor_2;
-extern uint16_t temp_ticks_1;
-extern uint16_t hum_ticks_1;
-extern uint16_t temp_ticks_2;
-extern uint16_t hum_ticks_2;
+extern uint16_t calculated_temp;
+extern uint8_t calculated_hum;
 extern int16_t error;
 
 // Function prototypes

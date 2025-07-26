@@ -244,10 +244,12 @@ int main(void)
     scan_i2c_bus();
     sensor_init_and_read();
 
-    char hex_data[16];
-    char response[64];
-    sprintf(hex_data, "AT+SEND \"%04X%04X\"\r\n", temp_ticks_1, hum_ticks_1);
-    send_data_and_get_response(&lora, hex_data, response, sizeof(response), 5000, "OK");
+
+    uint8_t payload[3];
+    payload[0] = (uint8_t)(calculated_temp >> 8);     // high byte
+    payload[1] = (uint8_t)(calculated_temp & 0xFF);   // low byte
+    payload[2] = calculated_hum;
+    LoRaWAN_SendHex(&lora, payload, 3);
   }
   /* USER CODE END 3 */
 }
