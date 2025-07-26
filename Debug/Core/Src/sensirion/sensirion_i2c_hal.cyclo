@@ -1,0 +1,5 @@
+../Core/Src/sensirion/sensirion_i2c_hal.c:10:6:sensirion_i2c_hal_init	1
+../Core/Src/sensirion/sensirion_i2c_hal.c:14:6:sensirion_i2c_hal_free	1
+../Core/Src/sensirion/sensirion_i2c_hal.c:18:8:sensirion_i2c_hal_read	1
+../Core/Src/sensirion/sensirion_i2c_hal.c:22:8:sensirion_i2c_hal_write	1
+../Core/Src/sensirion/sensirion_i2c_hal.c:26:6:sensirion_i2c_hal_sleep_usec	3

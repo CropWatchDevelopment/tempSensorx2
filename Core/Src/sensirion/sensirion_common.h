@@ -39,6 +39,7 @@ extern "C" {
 #endif
 
 #define NO_ERROR 0
+#define NO_SENSORS_FOUND 1
 #define NOT_IMPLEMENTED_ERROR 31
 
 #ifndef ARRAY_SIZE

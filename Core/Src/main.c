@@ -1,20 +1,20 @@
 /* USER CODE BEGIN Header */
 /**
-  ******************************************************************************
-  * @file           : main.c
-  * @brief          : Main program body
-  ******************************************************************************
-  * @attention
-  *
-  * Copyright (c) 2025 STMicroelectronics.
-  * All rights reserved.
-  *
-  * This software is licensed under terms that can be found in the LICENSE file
-  * in the root directory of this software component.
-  * If no LICENSE file comes with this software, it is provided AS-IS.
-  *
-  ******************************************************************************
-  */
+ ******************************************************************************
+ * @file           : main.c
+ * @brief          : Main program body
+ ******************************************************************************
+ * @attention
+ *
+ * Copyright (c) 2025 STMicroelectronics.
+ * All rights reserved.
+ *
+ * This software is licensed under terms that can be found in the LICENSE file
+ * in the root directory of this software component.
+ * If no LICENSE file comes with this software, it is provided AS-IS.
+ *
+ ******************************************************************************
+ */
 /* USER CODE END Header */
 /* Includes ------------------------------------------------------------------*/
 #include "main.h"
@@ -26,6 +26,9 @@
 #include <string.h>
 #include <stdbool.h> // For bool, true, false
 #include "sensirion/sensirion.h"
+#include "LoRaWAN/lorawan.h"
+#include "utils/sensor_payload.h"
+#include "stm32l0xx_hal.h"
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -35,23 +38,33 @@
 
 /* Private define ------------------------------------------------------------*/
 /* USER CODE BEGIN PD */
-#define AT_RESPONSE_BUFFER_SIZE 		256
-#define DEV_EUI_LENGTH          		16
-#define APP_EUI_LENGTH          		16
-#define APP_KEY_LENGTH          		32
-#define AS923_1_FREQ_MIN        		923200000
-#define AS923_1_FREQ_MAX        		923400000
-#define DEFAULT_FREQ            		923200000
-#define JAPAN_REGION            		9
-#define TTN_SUBBAND_CHANNEL     		0
-#define TX_POWER                		11
-#define DATA_RATE               		0
-#define JOIN_TIMEOUT_MS         		10000
+#define AT_RESPONSE_BUFFER_SIZE 256
+#define DEV_EUI_LENGTH 16
+#define APP_EUI_LENGTH 16
+#define APP_KEY_LENGTH 32
+#define AS923_1_FREQ_MIN 923200000
+#define AS923_1_FREQ_MAX 923400000
+#define DEFAULT_FREQ 923200000
+#define JAPAN_REGION 9
+#define TTN_SUBBAND_CHANNEL 0
+#define TX_POWER 11
+#define DATA_RATE 0
+#define JOIN_TIMEOUT_MS 10000
+
+// LORAWAN DEFINES
+#define AT_CMD_PREFIX "AT+SEND \""
+#define AT_CMD_SUFFIX "\"\r\n"
 
 // I2C DEFINES
-#define SHT40_I2C_ADDR 					(0x44 << 1) 				// SHT40 I2C address (shifted for HAL)
-#define SHT40_MEASURE_HIGH_PRECISION 	0xFD 						// High-precision measurement command
-#define TIMEOUT 						100 						// I2C timeout in ms
+#define SHT40_I2C_ADDR (0x44 << 1)        // SHT40 I2C address (shifted for HAL)
+#define SHT40_MEASURE_HIGH_PRECISION 0xFD // High-precision measurement command
+#define TIMEOUT 100                       // I2C timeout in ms
+
+// Read Battery Voltage
+#define VREFINT_CAL_ADDR   ((uint16_t*)0x1FF80078U)
+#define ADC_MAX            4095U       // 12‑bit full scale
+
+
 /* USER CODE END PD */
 
 /* Private macro -------------------------------------------------------------*/
@@ -60,6 +73,8 @@
 /* USER CODE END PM */
 
 /* Private variables ---------------------------------------------------------*/
+ADC_HandleTypeDef hadc;
+
 I2C_HandleTypeDef hi2c1;
 
 UART_HandleTypeDef hlpuart1;
@@ -68,21 +83,9 @@ UART_HandleTypeDef huart1;
 RTC_HandleTypeDef hrtc;
 
 /* USER CODE BEGIN PV */
-typedef enum {
-    LORAWAN_ERROR_OK = 0,
-    LORAWAN_ERROR_INVALID_PARAM = -1,
-    LORAWAN_ERROR_COMMUNICATION = -2,
-    LORAWAN_ERROR_UNEXPECTED_RESPONSE = -3,
-    LORAWAN_ERROR_TIMEOUT = -4,
-    LORAWAN_ERROR_NOT_JOINED = -5
-} LoRaWAN_Error_t;
-
-// Structure for ATC handle
-typedef struct {
-    UART_HandleTypeDef *huart; // Pointer to UART handle (e.g., &huart2)
-} ATC_HandleTypeDef;
-
 ATC_HandleTypeDef lora;
+int send_count = 0;
+uint32_t battery_value_adc;
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
@@ -92,232 +95,150 @@ static void MX_I2C1_Init(void);
 static void MX_USART1_UART_Init(void);
 static void MX_RTC_Init(void);
 static void MX_LPUART1_UART_Init(void);
+static void MX_ADC_Init(void);
 /* USER CODE BEGIN PFP */
 void ConsolePrintf(const char *format, ...);
 /* USER CODE END PFP */
 
 /* Private user code ---------------------------------------------------------*/
 /* USER CODE BEGIN 0 */
-
-
-int ATC_SendReceive(ATC_HandleTypeDef *lora, const char *command, uint32_t command_len, char *response, uint32_t response_size, uint32_t timeout_ms, const char *expected_response)
-{
-    HAL_StatusTypeDef status;
-
-    if (lora == NULL || lora->huart == NULL || command == NULL || command_len == 0) {
-        return -1; // Invalid parameters
-    }
-
-    status = HAL_UART_Transmit(lora->huart, (uint8_t *)command, command_len, timeout_ms);
-    if (status != HAL_OK) {
-        return -2; // Communication error
-    }
-
-    if (response != NULL && response_size > 0) {
-        uint16_t rx_len = 0;
-        memset(response, 0, response_size);
-        status = HAL_UARTEx_ReceiveToIdle(lora->huart, (uint8_t *)response,
-                                          response_size - 1, &rx_len, timeout_ms);
-        if (status != HAL_OK) {
-            return -4; // Timeout or receive error
-        }
-        response[rx_len] = '\0';
-    }
-
-    if (expected_response != NULL && response != NULL) {
-        if (strstr(response, expected_response) == NULL) {
-            return -3; // Unexpected response
-        }
-    }
-
-    return 0; // Success
-}
-// Wrapper function to send data and get response
-LoRaWAN_Error_t send_data_and_get_response(ATC_HandleTypeDef *lora, const char *data, char *response, uint32_t response_size, uint32_t timeout_ms, const char *expected_response)
-{
-    if (lora == NULL || lora->huart == NULL || data == NULL || response == NULL || response_size == 0) {
-        return LORAWAN_ERROR_INVALID_PARAM;
-    }
-
-    ATC_SendReceive(lora, "AT\r\n", 4, response, response_size, timeout_ms, expected_response);
-    HAL_Delay(300);
-    int result = ATC_SendReceive(lora, data, strlen(data), response, response_size, timeout_ms, expected_response);
-
-    if (result == -1) {
-        return LORAWAN_ERROR_INVALID_PARAM;
-    } else if (result == -2) {
-        return LORAWAN_ERROR_COMMUNICATION;
-    } else if (result == -3) {
-        return LORAWAN_ERROR_UNEXPECTED_RESPONSE;
-    } else if (result == -4) {
-        return LORAWAN_ERROR_TIMEOUT;
-    }
-
-    return LORAWAN_ERROR_OK;
-}
-LoRaWAN_Error_t join_lora_network(ATC_HandleTypeDef *lora)
-{
-    char response[AT_RESPONSE_BUFFER_SIZE];
-    LoRaWAN_Error_t status;
-
-    status = send_data_and_get_response(lora, "AT+JOIN\r\n", response, AT_RESPONSE_BUFFER_SIZE, JOIN_TIMEOUT_MS, "OK");
-    if (status != LORAWAN_ERROR_OK) {
-        ConsolePrintf("Failed to send AT+JOIN: %d\r\n", status);
-        return status;
-    }
-
-    memset(response, 0, AT_RESPONSE_BUFFER_SIZE);
-    uint16_t rx_len = 0;
-    HAL_StatusTypeDef hal_status = HAL_UARTEx_ReceiveToIdle(lora->huart,
-                                            (uint8_t *)response,
-                                            AT_RESPONSE_BUFFER_SIZE - 1,
-                                            &rx_len,
-                                            JOIN_TIMEOUT_MS);
-    if (hal_status != HAL_OK) {
-        ConsolePrintf("Failed to receive join response: %d\r\n", hal_status);
-        return LORAWAN_ERROR_TIMEOUT;
-    }
-    response[rx_len] = '\0';
-
-    if (strstr(response, "JOINED") != NULL) {
-        ConsolePrintf("Network joined successfullyrr\r\n");
-        return LORAWAN_ERROR_OK;
-    } else if (strstr(response, "JOIN FAILED") != NULL) {
-        ConsolePrintf("Failed to join network\r\n");
-        return LORAWAN_ERROR_NOT_JOINED;
-    } else {
-        ConsolePrintf("Unexpected join response: %s\r\n", response);
-        return LORAWAN_ERROR_UNEXPECTED_RESPONSE;
-    }
-}
-
-
-
-
-HAL_StatusTypeDef SHT40_Read(int16_t *temperature, int16_t *humidity)
-{
-    ConsolePrintf("Starting SHT40 read operation\r\n");
-
-    uint8_t tx_data[1] = {SHT40_MEASURE_HIGH_PRECISION};
-    uint8_t rx_data[6]; // 6 bytes: 2 temp, 1 CRC, 2 hum, 1 CRC
-
-    // Send measurement command
-    ConsolePrintf("Sending SHT40 measurement command (0x%02X)\r\n", SHT40_MEASURE_HIGH_PRECISION);
-    HAL_StatusTypeDef status = HAL_I2C_Master_Transmit(&hi2c1, 0x44, tx_data, 1, TIMEOUT);
-    if (status != HAL_OK)
-    {
-        ConsolePrintf("SHT40 I2C transmit failed, status: %d\r\n", status);
-        return status;
-    }
-    ConsolePrintf("SHT40 measurement command sent\r\n");
-
-    // Wait for measurement (~8.2ms for high precision)
-    ConsolePrintf("Waiting 10ms for SHT40 measurement\r\n");
-    HAL_Delay(10);
-
-    // Read 6 bytes (temp + CRC + humidity + CRC)
-    ConsolePrintf("Reading 6 bytes from SHT40\r\n");
-    status = HAL_I2C_Master_Receive(&hi2c1, SHT40_I2C_ADDR, rx_data, 6, TIMEOUT);
-    if (status != HAL_OK)
-    {
-        ConsolePrintf("SHT40 I2C receive failed, status: %d\r\n", status);
-        return status;
-    }
-    ConsolePrintf("SHT40 data received: %02X %02X %02X %02X %02X %02X\r\n",
-                  rx_data[0], rx_data[1], rx_data[2], rx_data[3], rx_data[4], rx_data[5]);
-
-    // Convert temperature to �C*10
-    uint16_t temp_raw = (rx_data[0] << 8) | rx_data[1];
-    *temperature = (int16_t)((-45.0f + 175.0f * ((float)temp_raw / 65535.0f)) * 10);
-    ConsolePrintf("Raw temperature: %u, Converted: %d (0.1�C)\r\n", temp_raw, *temperature);
-
-    // Convert humidity to %RH*10
-    uint16_t hum_raw = (rx_data[3] << 8) | rx_data[4];
-    *humidity = (int16_t)((-6.0f + 125.0f * ((float)hum_raw / 65535.0f)) * 10);
-    ConsolePrintf("Raw humidity: %u, Converted: %d (0.1%%RH)\r\n", hum_raw, *humidity);
-
-    // Optional: CRC check (rx_data[2] for temp, rx_data[5] for humidity)
-    // Add if needed (see CRC function below)
-    ConsolePrintf("SHT40 read completed successfully\r\n");
-
-    return HAL_OK;
-}
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 void RTC_IRQHandler(void)
 {
-    HAL_RTCEx_WakeUpTimerIRQHandler(&hrtc);
+  HAL_RTCEx_WakeUpTimerIRQHandler(&hrtc);
 }
 
 void RTC_WakeUp_Init(void)
 {
-	ConsolePrintf("Starting RTC Wake-Up Timer configuration\r\n");
+  ConsolePrintf("Starting RTC Wake-Up Timer configuration\r\n");
 
-	// Disable the Wake-Up Timer before configuring
-	HAL_RTCEx_DeactivateWakeUpTimer(&hrtc);
-	ConsolePrintf("RTC Wake-Up Timer disabled\r\n");
+  // Disable the Wake-Up Timer before configuring
+  HAL_RTCEx_DeactivateWakeUpTimer(&hrtc);
+  ConsolePrintf("RTC Wake-Up Timer disabled\r\n");
 
-	// Configure Wake-Up Timer for 60 seconds using LSI (~40 kHz)
-	// With AsynchPrediv = 127, SynchPrediv = 255: CK_SPRE = 40,000 / (128 * 256) = ~1.22 Hz
-	// For ~60 seconds: WakeUpCounter = (60 * 1.22) - 1 = ~72
-	if (HAL_RTCEx_SetWakeUpTimer_IT(&hrtc, 59, RTC_WAKEUPCLOCK_CK_SPRE_16BITS) != HAL_OK)
-	{
-		ConsolePrintf("RTC Wake-Up Timer Init Failed\r\n");
+  // Configure Wake-Up Timer for 60 seconds using LSI (~40 kHz)
+  // With AsynchPrediv = 127, SynchPrediv = 255: CK_SPRE = 40,000 / (128 * 256) = ~1.22 Hz
+  // For ~60 seconds: WakeUpCounter = (60 * 1.22) - 1 = ~72
+  if (HAL_RTCEx_SetWakeUpTimer_IT(&hrtc, 59, RTC_WAKEUPCLOCK_CK_SPRE_16BITS) != HAL_OK)
+  {
+    ConsolePrintf("RTC Wake-Up Timer Init Failed\r\n");
+  }
+  else
+  {
+    ConsolePrintf("RTC Wake-Up Timer Initialized for ~60 seconds\r\n");
+  }
 
-	}
-	else
-	{
-		ConsolePrintf("RTC Wake-Up Timer Initialized for ~60 seconds\r\n");
-	}
-
-	// Enable RTC Wake-Up interrupt in NVIC
-	HAL_NVIC_SetPriority(RTC_IRQn, 0, 0);
-	HAL_NVIC_EnableIRQ(RTC_IRQn);
-	ConsolePrintf("RTC Wake-Up interrupt enabled in NVIC\r\n");
+  // Enable RTC Wake-Up interrupt in NVIC
+  HAL_NVIC_SetPriority(RTC_IRQn, 0, 0);
+  HAL_NVIC_EnableIRQ(RTC_IRQn);
+  ConsolePrintf("RTC Wake-Up interrupt enabled in NVIC\r\n");
 }
 
 void HAL_RTCEx_WakeUpTimerEventCallback(RTC_HandleTypeDef *hrtc)
 {
-    // Reconfigure system clock after wake-up
-    SystemClock_Config();
+  // Reconfigure system clock after wake-up
+  SystemClock_Config();
 
-    // Print message
-    ConsolePrintf("Woke up at %s\r\n", "1-minute interval");
+  // Print message
+  ConsolePrintf("Woke up at %s\r\n", "1-minute interval");
 }
 
 void Enter_Stop_Mode(void)
 {
-        ConsolePrintf("Preparing to enter Stop mode\r\n");
+  ConsolePrintf("Preparing to enter Stop mode\r\n");
 
-    // Clear Wake-Up flag
-    __HAL_RTC_WAKEUPTIMER_CLEAR_FLAG(&hrtc, RTC_FLAG_WUTF);
-    ConsolePrintf("RTC Wake-Up flag cleared\r\n");
+  // Clear Wake-Up flag
+  __HAL_RTC_WAKEUPTIMER_CLEAR_FLAG(&hrtc, RTC_FLAG_WUTF);
+  ConsolePrintf("RTC Wake-Up flag cleared\r\n");
 
-    // Enter Stop mode (low-power mode)
-    ConsolePrintf("Entering Stop mode\r\n");
-    /* Suspend SysTick to prevent it from waking up the MCU immediately */
-    HAL_SuspendTick();
-    HAL_PWR_EnterSTOPMode(PWR_LOWPOWERREGULATOR_ON, PWR_STOPENTRY_WFI);
-    /* Resume SysTick after waking up */
-    HAL_ResumeTick();
-    ConsolePrintf("Exited Stop mode\r\n");
+  // Enter Stop mode (low-power mode)
+  ConsolePrintf("Entering Stop mode\r\n");
+  /* Suspend SysTick to prevent it from waking up the MCU immediately */
+  HAL_SuspendTick();
+  HAL_PWR_EnterSTOPMode(PWR_LOWPOWERREGULATOR_ON, PWR_STOPENTRY_WFI);
+  /* Resume SysTick after waking up */
+  HAL_ResumeTick();
+  ConsolePrintf("Exited Stop mode\r\n");
 }
+
+
+
+
+
+
+
+
+
+
+
+
+
+/**
+ * @brief  Read VBAT (mV) via 1 MΩ:1 MΩ divider + unity buffer, no FPU
+ * @retval Battery voltage in millivolts (rounded)
+ */
+uint32_t ReadBattery_mV(void)
+{
+    ADC_ChannelConfTypeDef sConfig = {0};
+    uint32_t raw_vref, raw_div;
+    uint32_t Vdda_mV, Vnode_mV, VBAT_mV;
+
+    // 1) Enable internal reference measurement
+    HAL_ADCEx_EnableVREFINT();
+
+    // 2) Sample VREFINT to compute true VDDA
+    sConfig.Channel = ADC_CHANNEL_VREFINT;
+    sConfig.Rank    = ADC_RANK_CHANNEL_NUMBER;
+    HAL_ADC_ConfigChannel(&hadc, &sConfig);
+
+    HAL_ADC_Start(&hadc);
+    HAL_ADC_PollForConversion(&hadc, HAL_MAX_DELAY);
+    raw_vref = HAL_ADC_GetValue(&hadc);
+    HAL_ADC_Stop(&hadc);
+
+    // Vdda = 3000 mV × VREFINT_CAL / raw_vref  (calibrated at 3.0 V)
+    Vdda_mV = (3000UL * (*VREFINT_CAL_ADDR) + raw_vref/2U) / raw_vref;
+
+    // 3) Turn on your divider/buffer and let it settle
+    HAL_GPIO_WritePin(GPIOB, VBAT_MEAS_EN_Pin, GPIO_PIN_SET);
+    HAL_Delay(300);
+
+    // 4) Sample the divider output (VBAT/2)
+    sConfig.Channel = ADC_CHANNEL_4;              // ← adjust to your sense pin
+    sConfig.Rank    = ADC_RANK_CHANNEL_NUMBER;
+    HAL_ADC_ConfigChannel(&hadc, &sConfig);
+
+    HAL_ADC_Start(&hadc);
+    HAL_ADC_PollForConversion(&hadc, HAL_MAX_DELAY);
+    raw_div = HAL_ADC_GetValue(&hadc);
+    HAL_ADC_Stop(&hadc);
+
+    // 5) Turn divider off
+    HAL_GPIO_WritePin(GPIOB, VBAT_MEAS_EN_Pin, GPIO_PIN_RESET);
+
+    // 6) Compute node voltage in mV and undo the 1:1 divider
+    //    Vnode_mV = raw_div/4095 * Vdda_mV
+    Vnode_mV = ((raw_div * Vdda_mV) + (ADC_MAX/2U)) / ADC_MAX;
+    VBAT_mV  = Vnode_mV * 2U;  // since divider ratio is 0.5
+
+    return VBAT_mV;  // e.g. 3700 → 3.700 V
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 /* USER CODE END 0 */
 
 /**
@@ -353,14 +274,19 @@ int main(void)
   MX_USART1_UART_Init();
   MX_RTC_Init();
   MX_LPUART1_UART_Init();
+  MX_ADC_Init();
   /* USER CODE BEGIN 2 */
   RTC_WakeUp_Init();
 
-  /* Scan the I2C bus and read sensors once at startup */
-  scan_i2c_bus();
-  sensor_init_and_read();
+//  /* Scan the I2C bus and read sensors once at startup */
+//  scan_i2c_bus();
+//  sensor_init_and_read();
+//  LoRaWAN_Join(&lora);
 
-  join_lora_network(&lora);
+  HAL_GPIO_WritePin(GPIOB, VBAT_MEAS_EN_Pin, GPIO_PIN_SET);
+  HAL_Delay(300);                          // let the divider & buffer settle
+  uint32_t batt = ReadBattery_mV();
+	HAL_GPIO_WritePin(GPIOB, VBAT_MEAS_EN_Pin, GPIO_PIN_RESET);
   /* USER CODE END 2 */
 
   /* Infinite loop */
@@ -371,57 +297,66 @@ int main(void)
     /* USER CODE END WHILE */
 
     /* USER CODE BEGIN 3 */
-	  ConsolePrintf("Going to sleep...\r\n");
+    ConsolePrintf("Going to sleep...\r\n");
 
-	  		HAL_I2C_DeInit(&hi2c1);
-	  		HAL_UART_DeInit(&huart1);
-	  		// De-init LPUART1 (LoRaWAN UART)
-	  		HAL_UART_DeInit(&hlpuart1);
+    HAL_I2C_DeInit(&hi2c1);
+    HAL_UART_DeInit(&huart1);
+    // De-init LPUART1 (LoRaWAN UART)
+    HAL_UART_DeInit(&hlpuart1);
 
-	  		// Disable LPUART wake-up from Stop mode
-	  		__HAL_UART_DISABLE_IT(&hlpuart1, UART_IT_RXNE); // Disable RXNE interrupt
-	  		__HAL_UART_DISABLE_IT(&hlpuart1, UART_IT_IDLE); // Disable IDLE interrupt
-	  		__HAL_UART_CLEAR_FLAG(&hlpuart1, UART_FLAG_RXNE | UART_FLAG_IDLE); // Clear any pending flags
+    // Disable LPUART wake-up from Stop mode
+    __HAL_UART_DISABLE_IT(&hlpuart1, UART_IT_RXNE);                    // Disable RXNE interrupt
+    __HAL_UART_DISABLE_IT(&hlpuart1, UART_IT_IDLE);                    // Disable IDLE interrupt
+    __HAL_UART_CLEAR_FLAG(&hlpuart1, UART_FLAG_RXNE | UART_FLAG_IDLE); // Clear any pending flags
 
-	  		__HAL_UART_DISABLE_IT(&huart1, UART_IT_RXNE); // Disable RXNE interrupt
-	  		__HAL_UART_DISABLE_IT(&huart1, UART_IT_IDLE); // Disable IDLE interrupt
-	  		__HAL_UART_CLEAR_FLAG(&huart1, UART_FLAG_RXNE | UART_FLAG_IDLE); // Clear any pending flags
+    __HAL_UART_DISABLE_IT(&huart1, UART_IT_RXNE);                    // Disable RXNE interrupt
+    __HAL_UART_DISABLE_IT(&huart1, UART_IT_IDLE);                    // Disable IDLE interrupt
+    __HAL_UART_CLEAR_FLAG(&huart1, UART_FLAG_RXNE | UART_FLAG_IDLE); // Clear any pending flags
+
+    // Enter Stop mode
+    Enter_Stop_Mode(); // Wakes up via RTC interrupt
+
+    // === Code resumes after wake-up ===
+    ConsolePrintf("Resumed after wake-up\r\n");
+
+    // Reconfigure clocks
+    SystemClock_Config();
+    ConsolePrintf("System clock reconfigured\r\n");
+
+    // Reinit I2C peripheral
+    MX_I2C1_Init();
+    ConsolePrintf("I2C1 reinitialized\r\n");
+
+    // Reinit UART
+    MX_USART1_UART_Init();
+    ConsolePrintf("UART reinitialized\r\n");
+
+    MX_LPUART1_UART_Init();
+    ConsolePrintf("LPUART1 (lora) reinitialized\r\n");
+
+    // Reinit WakeUp timer (MUST be outside the callback!)
+    RTC_WakeUp_Init();
+    ConsolePrintf("RTC Wake-Up Timer reinitialized\r\n");
 
 
-	  		// Enter Stop mode
-	  		Enter_Stop_Mode();  // Wakes up via RTC interrupt
+    HAL_GPIO_WritePin(I2C_ENABLE_GPIO_Port, I2C_ENABLE_Pin, GPIO_PIN_SET);
+    HAL_Delay(300); // Short Delay to let voltage stabalize
+    scan_i2c_bus();
+    bool i2c_success = sensor_init_and_read();
+    HAL_GPIO_WritePin(I2C_ENABLE_GPIO_Port, I2C_ENABLE_Pin, GPIO_PIN_RESET);
 
-	  		// === Code resumes after wake-up ===
-	  		ConsolePrintf("Resumed after wake-up\r\n");
-
-                        // Reconfigure clocks
-                        SystemClock_Config();
-                        ConsolePrintf("System clock reconfigured\r\n");
-
-                        // Reinit I2C peripheral
-                        MX_I2C1_Init();
-                        ConsolePrintf("I2C1 reinitialized\r\n");
-
-                        // Reinit UART
-                        MX_USART1_UART_Init();
-                        ConsolePrintf("UART reinitialized\r\n");
-
-	  		MX_LPUART1_UART_Init();
-	  		ConsolePrintf("LPUART1 (lora) reinitialized\r\n");
-
-	  		// Reinit WakeUp timer (MUST be outside the callback!)
-	  		RTC_WakeUp_Init();
-	  		ConsolePrintf("RTC Wake-Up Timer reinitialized\r\n");
-
-	  		scan_i2c_bus();
-	  		sensor_init_and_read();
-
-            char response[32];
-            ATC_SendReceive(&lora, "AT\r\n", strlen("AT\r\n"), response, sizeof(response), 5000, "OK");
-            char response2[64];
-            ATC_SendReceive(&lora, "AT+SEND \"AA\"\r\n", strlen("AT+SEND \"AA\"\r\n"), response2, sizeof(response2), 5000, "OK");
-	  		__NOP();
-
+    if (i2c_success)
+    {
+		uint8_t payload[3];
+		payload[0] = (uint8_t)(calculated_temp >> 8);     // high byte
+		payload[1] = (uint8_t)(calculated_temp & 0xFF);   // low byte
+		payload[2] = calculated_hum;
+		LoRaWAN_SendHex(&lora, payload, 3);
+    }
+    else
+    {
+//    	LoRaWAN_SendHex(&lora, , 3);
+    }
   }
   /* USER CODE END 3 */
 }
@@ -477,6 +412,78 @@ void SystemClock_Config(void)
   {
     Error_Handler();
   }
+}
+
+/**
+  * @brief ADC Initialization Function
+  * @param None
+  * @retval None
+  */
+static void MX_ADC_Init(void)
+{
+
+  /* USER CODE BEGIN ADC_Init 0 */
+
+  /* USER CODE END ADC_Init 0 */
+
+  ADC_ChannelConfTypeDef sConfig = {0};
+
+  /* USER CODE BEGIN ADC_Init 1 */
+
+  /* USER CODE END ADC_Init 1 */
+
+  /** Configure the global features of the ADC (Clock, Resolution, Data Alignment and number of conversion)
+  */
+  hadc.Instance = ADC1;
+  hadc.Init.OversamplingMode = DISABLE;
+  hadc.Init.ClockPrescaler = ADC_CLOCK_SYNC_PCLK_DIV1;
+  hadc.Init.Resolution = ADC_RESOLUTION_12B;
+  hadc.Init.SamplingTime = ADC_SAMPLETIME_160CYCLES_5;
+  hadc.Init.ScanConvMode = ADC_SCAN_DIRECTION_FORWARD;
+  hadc.Init.DataAlign = ADC_DATAALIGN_RIGHT;
+  hadc.Init.ContinuousConvMode = DISABLE;
+  hadc.Init.DiscontinuousConvMode = DISABLE;
+  hadc.Init.ExternalTrigConvEdge = ADC_EXTERNALTRIGCONVEDGE_NONE;
+  hadc.Init.ExternalTrigConv = ADC_SOFTWARE_START;
+  hadc.Init.DMAContinuousRequests = DISABLE;
+  hadc.Init.EOCSelection = ADC_EOC_SINGLE_CONV;
+  hadc.Init.Overrun = ADC_OVR_DATA_PRESERVED;
+  hadc.Init.LowPowerAutoWait = DISABLE;
+  hadc.Init.LowPowerFrequencyMode = ENABLE;
+  hadc.Init.LowPowerAutoPowerOff = DISABLE;
+  if (HAL_ADC_Init(&hadc) != HAL_OK)
+  {
+    Error_Handler();
+  }
+
+  /** Configure for the selected ADC regular channel to be converted.
+  */
+  sConfig.Channel = ADC_CHANNEL_0;
+  sConfig.Rank = ADC_RANK_CHANNEL_NUMBER;
+  if (HAL_ADC_ConfigChannel(&hadc, &sConfig) != HAL_OK)
+  {
+    Error_Handler();
+  }
+
+  /** Configure for the selected ADC regular channel to be converted.
+  */
+  sConfig.Channel = ADC_CHANNEL_TEMPSENSOR;
+  if (HAL_ADC_ConfigChannel(&hadc, &sConfig) != HAL_OK)
+  {
+    Error_Handler();
+  }
+
+  /** Configure for the selected ADC regular channel to be converted.
+  */
+  sConfig.Channel = ADC_CHANNEL_VREFINT;
+  if (HAL_ADC_ConfigChannel(&hadc, &sConfig) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  /* USER CODE BEGIN ADC_Init 2 */
+
+  /* USER CODE END ADC_Init 2 */
+
 }
 
 /**
@@ -649,10 +656,10 @@ static void MX_GPIO_Init(void)
   __HAL_RCC_GPIOB_CLK_ENABLE();
 
   /*Configure GPIO pin Output Level */
-  HAL_GPIO_WritePin(GPIOB, GPIO_PIN_5, GPIO_PIN_SET);
+  HAL_GPIO_WritePin(GPIOB, VBAT_MEAS_EN_Pin|I2C_ENABLE_Pin, GPIO_PIN_RESET);
 
-  /*Configure GPIO pin : PB5 */
-  GPIO_InitStruct.Pin = GPIO_PIN_5;
+  /*Configure GPIO pins : VBAT_MEAS_EN_Pin I2C_ENABLE_Pin */
+  GPIO_InitStruct.Pin = VBAT_MEAS_EN_Pin|I2C_ENABLE_Pin;
   GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
   GPIO_InitStruct.Pull = GPIO_NOPULL;
   GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
@@ -666,32 +673,32 @@ static void MX_GPIO_Init(void)
 /* USER CODE BEGIN 4 */
 void ConsolePrintf(const char *format, ...)
 {
-    char buffer[128]; // Buffer for the original message
-    char timestamp_buffer[32]; // Buffer for timestamp
-    char final_buffer[160]; // Combined buffer (timestamp + message)
+  char buffer[128];          // Buffer for the original message
+  char timestamp_buffer[32]; // Buffer for timestamp
+  char final_buffer[160];    // Combined buffer (timestamp + message)
 
-    // Get time and date from RTC
-    RTC_DateTypeDef date;
-    RTC_TimeTypeDef time;
-    HAL_RTC_GetTime(&hrtc, &time, RTC_FORMAT_BIN);
-    HAL_RTC_GetDate(&hrtc, &date, RTC_FORMAT_BIN);
+  // Get time and date from RTC
+  RTC_DateTypeDef date;
+  RTC_TimeTypeDef time;
+  HAL_RTC_GetTime(&hrtc, &time, RTC_FORMAT_BIN);
+  HAL_RTC_GetDate(&hrtc, &date, RTC_FORMAT_BIN);
 
-    // Format timestamp as [YYYY-MM-DD HH:MM:SS]
-    snprintf(timestamp_buffer, sizeof(timestamp_buffer), "[20%02d-%02d-%02d %02d:%02d:%02d] ",
-             date.Year, date.Month, date.Date,
-             time.Hours, time.Minutes, time.Seconds);
+  // Format timestamp as [YYYY-MM-DD HH:MM:SS]
+  snprintf(timestamp_buffer, sizeof(timestamp_buffer), "[20%02d-%02d-%02d %02d:%02d:%02d] ",
+           date.Year, date.Month, date.Date,
+           time.Hours, time.Minutes, time.Seconds);
 
-    // Format the original message
-    va_list args;
-    va_start(args, format);
-    vsnprintf(buffer, sizeof(buffer), format, args);
-    va_end(args);
+  // Format the original message
+  va_list args;
+  va_start(args, format);
+  vsnprintf(buffer, sizeof(buffer), format, args);
+  va_end(args);
 
-    // Combine timestamp and message
-    snprintf(final_buffer, sizeof(final_buffer), "%s%s", timestamp_buffer, buffer);
+  // Combine timestamp and message
+  snprintf(final_buffer, sizeof(final_buffer), "%s%s", timestamp_buffer, buffer);
 
-    // Transmit the combined message
-    HAL_UART_Transmit(&huart1, (uint8_t *)final_buffer, strlen(final_buffer), HAL_MAX_DELAY);
+  // Transmit the combined message
+  HAL_UART_Transmit(&huart1, (uint8_t *)final_buffer, strlen(final_buffer), HAL_MAX_DELAY);
 }
 /* USER CODE END 4 */
 
