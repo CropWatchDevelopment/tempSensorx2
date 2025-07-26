@@ -340,10 +340,7 @@ int main(void)
 //  sensor_init_and_read();
 //  LoRaWAN_Join(&lora);
 
-  HAL_GPIO_WritePin(GPIOB, VBAT_MEAS_EN_Pin, GPIO_PIN_SET);
-  HAL_Delay(300);                          // let the divider & buffer settle
-  uint32_t batt = ReadBattery_mV();
-	HAL_GPIO_WritePin(GPIOB, VBAT_MEAS_EN_Pin, GPIO_PIN_RESET);
+  uint32_t batt = 0;     // battery value will be read after first sleep cycle
   /* USER CODE END 2 */
 
   /* Infinite loop */
