@@ -190,8 +190,12 @@ uint32_t ReadBattery_mV(void)
     sConfig.Rank    = ADC_RANK_CHANNEL_NUMBER;
     HAL_ADC_ConfigChannel(&hadc, &sConfig);
 
-    HAL_ADC_Start(&hadc);
-    HAL_ADC_PollForConversion(&hadc, HAL_MAX_DELAY);
+    if (HAL_ADC_Start(&hadc) != HAL_OK) {
+        Error_Handler();
+    }
+    if (HAL_ADC_PollForConversion(&hadc, 10) != HAL_OK) {
+        Error_Handler();
+    }
     raw_vref = HAL_ADC_GetValue(&hadc);
     HAL_ADC_Stop(&hadc);
 
@@ -207,8 +211,12 @@ uint32_t ReadBattery_mV(void)
     sConfig.Rank    = ADC_RANK_CHANNEL_NUMBER;
     HAL_ADC_ConfigChannel(&hadc, &sConfig);
 
-    HAL_ADC_Start(&hadc);
-    HAL_ADC_PollForConversion(&hadc, HAL_MAX_DELAY);
+    if (HAL_ADC_Start(&hadc) != HAL_OK) {
+        Error_Handler();
+    }
+    if (HAL_ADC_PollForConversion(&hadc, 10) != HAL_OK) {
+        Error_Handler();
+    }
     raw_div = HAL_ADC_GetValue(&hadc);
     HAL_ADC_Stop(&hadc);
 
@@ -264,6 +272,9 @@ uint32_t SleepAndMeasureBattery(void)
 
     /* Measure the battery voltage */
     batt_mV = ReadBattery_mV();
+
+    /* Shut down ADC again to save power until next use */
+    HAL_ADC_DeInit(&hadc);
 
     return batt_mV;
 }
