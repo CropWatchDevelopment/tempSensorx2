@@ -281,7 +281,7 @@ int main(void)
 //  /* Scan the I2C bus and read sensors once at startup */
 //  scan_i2c_bus();
 //  sensor_init_and_read();
-//  LoRaWAN_Join(&lora);
+  LoRaWAN_Join(&lora);
 
   HAL_GPIO_WritePin(GPIOB, VBAT_MEAS_EN_Pin, GPIO_PIN_SET);
   HAL_Delay(300);                          // let the divider & buffer settle
