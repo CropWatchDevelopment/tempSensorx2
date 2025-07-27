@@ -224,6 +224,12 @@ int main(void)
 		  batt_voltage,       // pass the uint32_t mV directly
 		  batt_percentage     // pass the uint8_t directly
 	  );
+	  // Set battery status in LoRaWAN module
+	  LoRaWAN_Set_Battery_Status(&lora, batt_percentage, 1);
+  } else {
+	  ConsolePrintf("Initial battery measurement failed\r\n");
+	  // Set battery status as unmeasurable
+	  LoRaWAN_Set_Battery_Status(&lora, 0, 0);
   }
 
 //  /* Scan the I2C bus and read sensors once at startup */
@@ -275,6 +281,7 @@ int main(void)
     MX_USART1_UART_Init();
     ConsolePrintf("UART reinitialized\r\n");
 
+    // Reinit LoRaWAN Module UART
     MX_LPUART1_UART_Init();
     ConsolePrintf("LPUART1 (lora) reinitialized\r\n");
 
@@ -282,13 +289,17 @@ int main(void)
     RTC_WakeUp_Init();
     ConsolePrintf("RTC Wake-Up Timer reinitialized\r\n");
 
+    // Reinit ADC For battery monitoring (sometimes)
+    MX_ADC_Init();
+    ConsolePrintf("ADC reinitialized\r\n");
+
     // Measure battery voltage after waking up
     uint32_t batt_voltage;
     uint8_t batt_percentage;
     if (GetBatteryLevel(&batt_voltage, &batt_percentage) == BATTERY_OK) {
       ConsolePrintf("Battery: %lu mV (%d%%)\r\n", batt_voltage, batt_percentage);
-    } else {
-      ConsolePrintf("Battery measurement failed\r\n");
+      // Update battery status in LoRaWAN module
+      LoRaWAN_Set_Battery_Status(&lora, batt_percentage, 1);
     }
 
 

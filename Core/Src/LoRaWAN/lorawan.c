@@ -38,8 +38,17 @@ LoRaWAN_Error_t send_data_and_get_response(ATC_HandleTypeDef *lora, const char *
         return LORAWAN_ERROR_INVALID_PARAM;
     }
 
+    // Wake Module from Sleep (if it is asleep)
     ATC_SendReceive(lora, "AT\r\n", 4, response, response_size, timeout_ms, expected_response);
     HAL_Delay(300);
+
+    char* isConnectedResponse = NULL;
+    int isConnectedStatus = ATC_SendReceive(lora, "ATI 3001\r\n", 10, isConnectedResponse, response_size, 300, "1");
+    if (isConnectedStatus == 0)
+    {
+    	LoRaWAN_Join(lora);
+    }
+
     int result = ATC_SendReceive(lora, data, strlen(data), response, response_size, timeout_ms, expected_response);
 
     if (result == -1) {
@@ -108,16 +117,75 @@ LoRaWAN_Error_t LoRaWAN_Set_Battery(ATC_HandleTypeDef *lora, int level)
         return LORAWAN_ERROR_INVALID_PARAM;
     }
 
-    // 2. Build the AT command string
-    //    "AT+BAT=100\r\n" is 12 characters, so 16 bytes is plenty
+    // 2. Map percentage (0-100) to LoRaWAN battery status (1-254)
+    //    0% maps to 1 (minimum)
+    //    100% maps to 254 (maximum)
+    //    Formula: battery_status = 1 + (level * 253) / 100
+    int battery_status;
+    if (level == 0) {
+        battery_status = 1;  // Minimum battery level
+    } else {
+        battery_status = 1 + (level * 253) / 100;
+        // Ensure we don't exceed 254
+        if (battery_status > 254) {
+            battery_status = 254;
+        }
+    }
+
+    // 3. Build the AT command string
     char command[16];
-    int n = snprintf(command, sizeof(command), "AT+BAT=%d\r\n", level);
+    int n = snprintf(command, sizeof(command), "AT+BAT=%d\r\n", battery_status);
     if (n < 0 || n >= (int)sizeof(command)) {
         // formatting error or truncated
         return LORAWAN_ERROR_INVALID_PARAM;
     }
 
-    // 3. Send and wait for "OK"
+    // 4. Send and wait for "OK"
+    char response[64];
+    return send_data_and_get_response(
+        lora,
+        command,
+        response,
+        sizeof(response),
+        5000,      // timeout in ms
+        "OK"       // expected response
+    );
+}
+
+LoRaWAN_Error_t LoRaWAN_Set_Battery_Status(ATC_HandleTypeDef *lora, uint8_t battery_percentage, int measurement_success)
+{
+    // 1. Validate parameters
+    if (lora == NULL || lora->huart == NULL) {
+        return LORAWAN_ERROR_INVALID_PARAM;
+    }
+
+    int battery_status;
+    
+    // 2. Determine battery status based on measurement success
+    if (!measurement_success) {
+        // Battery measurement failed - use 255 (unable to measure)
+        battery_status = 255;
+    } else {
+        // Battery measurement succeeded - map percentage (0-100) to LoRaWAN battery status (1-254)
+        if (battery_percentage == 0) {
+            battery_status = 1;  // Minimum battery level
+        } else if (battery_percentage >= 100) {
+            battery_status = 254;  // Maximum battery level
+        } else {
+            battery_status = 1 + (battery_percentage * 253) / 100;
+        }
+    }
+
+    // 3. Build the AT command string
+    char command[16];
+
+    int n = snprintf(command, sizeof(command), "AT+BAT=%d\r\n", battery_status);
+    if (n < 0 || n >= (int)sizeof(command)) {
+        // formatting error or truncated
+        return LORAWAN_ERROR_INVALID_PARAM;
+    }
+
+    // 4. Send and wait for "OK"
     char response[64];
     return send_data_and_get_response(
         lora,

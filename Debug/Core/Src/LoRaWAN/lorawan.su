@@ -1,5 +1,6 @@
 ../Core/Src/LoRaWAN/lorawan.c:5:12:ATC_SendReceive	56	static
-../Core/Src/LoRaWAN/lorawan.c:35:17:send_data_and_get_response	56	static
-../Core/Src/LoRaWAN/lorawan.c:58:17:LoRaWAN_Join	304	static
-../Core/Src/LoRaWAN/lorawan.c:82:17:LoRaWAN_SendHex	192	dynamic
-../Core/Src/LoRaWAN/lorawan.c:101:17:LoRaWAN_Set_Battery	112	static
+../Core/Src/LoRaWAN/lorawan.c:35:17:send_data_and_get_response	64	static
+../Core/Src/LoRaWAN/lorawan.c:67:17:LoRaWAN_Join	304	static
+../Core/Src/LoRaWAN/lorawan.c:91:17:LoRaWAN_SendHex	192	dynamic
+../Core/Src/LoRaWAN/lorawan.c:110:17:LoRaWAN_Set_Battery	112	static
+../Core/Src/LoRaWAN/lorawan.c:155:17:LoRaWAN_Set_Battery_Status	120	static

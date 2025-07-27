@@ -24,5 +24,6 @@ LoRaWAN_Error_t LoRaWAN_SendHex(ATC_HandleTypeDef *lora, const uint8_t *payload,
 
 // Setup commands
 LoRaWAN_Error_t LoRaWAN_Set_Battery(ATC_HandleTypeDef *lora, int battery);
+LoRaWAN_Error_t LoRaWAN_Set_Battery_Status(ATC_HandleTypeDef *lora, uint8_t battery_percentage, int measurement_success);
 
 #endif // LORAWAN_H
