@@ -27,6 +27,7 @@
 #include <stdbool.h> // For bool, true, false
 #include "sensirion/sensirion.h"
 #include "LoRaWAN/lorawan.h"
+#include "battery/battery.h"
 #include "utils/sensor_payload.h"
 #include "stm32l0xx_hal.h"
 /* USER CODE END Includes */
@@ -96,6 +97,7 @@ static void MX_USART1_UART_Init(void);
 static void MX_RTC_Init(void);
 static void MX_LPUART1_UART_Init(void);
 static void MX_ADC_Init(void);
+static void MX_ADC_DeInit(void);
 /* USER CODE BEGIN PFP */
 void ConsolePrintf(const char *format, ...);
 /* USER CODE END PFP */
@@ -160,6 +162,20 @@ void Enter_Stop_Mode(void)
   ConsolePrintf("Exited Stop mode\r\n");
 }
 
+void MX_ADC_DeInit(void)
+{
+    /* 1) De‑initialize the ADC handle */
+    if (HAL_ADC_DeInit(&hadc) != HAL_OK) {
+        Error_Handler();
+    }
+    /* 2) Disable the ADC clock */
+    __HAL_RCC_ADC1_CLK_DISABLE();
+
+    /* 3) Reset the GPIO pin back to its default state
+       (PB1 was configured as analog in MX_GPIO_Init) */
+    HAL_GPIO_DeInit(GPIOB, GPIO_PIN_1);
+}
+
 /* USER CODE END 0 */
 
 /**
@@ -199,15 +215,21 @@ int main(void)
   /* USER CODE BEGIN 2 */
   RTC_WakeUp_Init();
 
+
+  uint32_t batt_voltage;
+  uint8_t batt_percentage;
+  if (GetBatteryLevel(&batt_voltage, &batt_percentage) == BATTERY_OK) {
+	  ConsolePrintf(
+		  "Initial Battery: %lu mV (%d%%)\r\n",
+		  batt_voltage,       // pass the uint32_t mV directly
+		  batt_percentage     // pass the uint8_t directly
+	  );
+  }
+
 //  /* Scan the I2C bus and read sensors once at startup */
 //  scan_i2c_bus();
 //  sensor_init_and_read();
   LoRaWAN_Join(&lora);
-
-  HAL_GPIO_WritePin(GPIOB, VBAT_MEAS_EN_Pin, GPIO_PIN_SET);
-  HAL_Delay(300);                          // let the divider & buffer settle
-  uint32_t batt = ReadBattery_mV();
-	HAL_GPIO_WritePin(GPIOB, VBAT_MEAS_EN_Pin, GPIO_PIN_RESET);
   /* USER CODE END 2 */
 
   /* Infinite loop */
@@ -224,6 +246,7 @@ int main(void)
     HAL_UART_DeInit(&huart1);
     // De-init LPUART1 (LoRaWAN UART)
     HAL_UART_DeInit(&hlpuart1);
+    MX_ADC_DeInit();
 
     // Disable LPUART wake-up from Stop mode
     __HAL_UART_DISABLE_IT(&hlpuart1, UART_IT_RXNE);                    // Disable RXNE interrupt
@@ -260,11 +283,13 @@ int main(void)
     ConsolePrintf("RTC Wake-Up Timer reinitialized\r\n");
 
     // Measure battery voltage after waking up
-    HAL_GPIO_WritePin(GPIOB, VBAT_MEAS_EN_Pin, GPIO_PIN_SET);
-    HAL_Delay(300);                          // allow divider to settle
-    batt = ReadBattery_mV();
-    HAL_GPIO_WritePin(GPIOB, VBAT_MEAS_EN_Pin, GPIO_PIN_RESET);
-    ConsolePrintf("Battery voltage: %lu mV\r\n", batt);
+    uint32_t batt_voltage;
+    uint8_t batt_percentage;
+    if (GetBatteryLevel(&batt_voltage, &batt_percentage) == BATTERY_OK) {
+      ConsolePrintf("Battery: %lu mV (%d%%)\r\n", batt_voltage, batt_percentage);
+    } else {
+      ConsolePrintf("Battery measurement failed\r\n");
+    }
 
 
     HAL_GPIO_WritePin(I2C_ENABLE_GPIO_Port, I2C_ENABLE_Pin, GPIO_PIN_SET);
@@ -275,15 +300,20 @@ int main(void)
 
     if (i2c_success)
     {
-		uint8_t payload[3];
+		uint8_t payload[5];
 		payload[0] = (uint8_t)(calculated_temp >> 8);     // high byte
 		payload[1] = (uint8_t)(calculated_temp & 0xFF);   // low byte
 		payload[2] = calculated_hum;
-		LoRaWAN_SendHex(&lora, payload, 3);
+		payload[3] = (uint8_t)(batt_voltage >> 8);        // battery voltage high byte
+		payload[4] = batt_percentage;                     // battery percentage
+		LoRaWAN_SendHex(&lora, payload, 5);
     }
     else
     {
-//    	LoRaWAN_SendHex(&lora, , 3);
+		uint8_t payload[2];
+		payload[0] = (uint8_t)(batt_voltage >> 8);        // battery voltage high byte
+		payload[1] = batt_percentage;                     // battery percentage
+		LoRaWAN_SendHex(&lora, payload, 2);
     }
   }
   /* USER CODE END 3 */
@@ -376,38 +406,16 @@ static void MX_ADC_Init(void)
   hadc.Init.DMAContinuousRequests = DISABLE;
   hadc.Init.EOCSelection = ADC_EOC_SINGLE_CONV;
   hadc.Init.Overrun = ADC_OVR_DATA_PRESERVED;
-  hadc.Init.LowPowerAutoWait = DISABLE;
+  hadc.Init.LowPowerAutoWait = ENABLE;
   hadc.Init.LowPowerFrequencyMode = ENABLE;
-  hadc.Init.LowPowerAutoPowerOff = DISABLE;
+  hadc.Init.LowPowerAutoPowerOff = ENABLE;
   if (HAL_ADC_Init(&hadc) != HAL_OK)
   {
     Error_Handler();
   }
 
-  /** Configure for the selected ADC regular channel to be converted.
-  */
-  sConfig.Channel = ADC_CHANNEL_0;
-  sConfig.Rank = ADC_RANK_CHANNEL_NUMBER;
-  if (HAL_ADC_ConfigChannel(&hadc, &sConfig) != HAL_OK)
-  {
-    Error_Handler();
-  }
-
-  /** Configure for the selected ADC regular channel to be converted.
-  */
-  sConfig.Channel = ADC_CHANNEL_TEMPSENSOR;
-  if (HAL_ADC_ConfigChannel(&hadc, &sConfig) != HAL_OK)
-  {
-    Error_Handler();
-  }
-
-  /** Configure for the selected ADC regular channel to be converted.
-  */
-  sConfig.Channel = ADC_CHANNEL_VREFINT;
-  if (HAL_ADC_ConfigChannel(&hadc, &sConfig) != HAL_OK)
-  {
-    Error_Handler();
-  }
+  // Note: Channel configuration is done dynamically in battery measurement function
+  // to minimize power consumption
   /* USER CODE BEGIN ADC_Init 2 */
 
   /* USER CODE END ADC_Init 2 */
@@ -584,13 +592,22 @@ static void MX_GPIO_Init(void)
   __HAL_RCC_GPIOB_CLK_ENABLE();
 
   /*Configure GPIO pin Output Level */
-  HAL_GPIO_WritePin(GPIOB, VBAT_MEAS_EN_Pin|I2C_ENABLE_Pin, GPIO_PIN_RESET);
+  HAL_GPIO_WritePin(VBAT_MEAS_EN_GPIO_Port, VBAT_MEAS_EN_Pin, GPIO_PIN_SET);
+
+  /*Configure GPIO pin Output Level */
+  HAL_GPIO_WritePin(I2C_ENABLE_GPIO_Port, I2C_ENABLE_Pin, GPIO_PIN_RESET);
 
   /*Configure GPIO pins : VBAT_MEAS_EN_Pin I2C_ENABLE_Pin */
   GPIO_InitStruct.Pin = VBAT_MEAS_EN_Pin|I2C_ENABLE_Pin;
   GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
   GPIO_InitStruct.Pull = GPIO_NOPULL;
   GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
+  HAL_GPIO_Init(GPIOB, &GPIO_InitStruct);
+
+  /*Configure GPIO pin : PB1 */
+  GPIO_InitStruct.Pin = GPIO_PIN_1;
+  GPIO_InitStruct.Mode = GPIO_MODE_ANALOG;
+  GPIO_InitStruct.Pull = GPIO_NOPULL;
   HAL_GPIO_Init(GPIOB, &GPIO_InitStruct);
 
   /* USER CODE BEGIN MX_GPIO_Init_2 */

@@ -1,0 +1,2 @@
+../Core/Src/battery/battery.c:19:7:ReadBatteryVoltage	32	static
+../Core/Src/battery/battery.c:53:18:GetBatteryLevel	40	static

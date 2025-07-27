@@ -22,4 +22,7 @@ LoRaWAN_Error_t send_data_and_get_response(ATC_HandleTypeDef *lora, const char *
 LoRaWAN_Error_t LoRaWAN_Join(ATC_HandleTypeDef *lora);
 LoRaWAN_Error_t LoRaWAN_SendHex(ATC_HandleTypeDef *lora, const uint8_t *payload, size_t length);
 
+// Setup commands
+LoRaWAN_Error_t LoRaWAN_Set_Battery(ATC_HandleTypeDef *lora, int battery);
+
 #endif // LORAWAN_H

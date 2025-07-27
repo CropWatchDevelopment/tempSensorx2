@@ -98,3 +98,34 @@ LoRaWAN_Error_t LoRaWAN_SendHex(ATC_HandleTypeDef *lora, const uint8_t *payload,
     return send_data_and_get_response(lora, command, response, sizeof(response), 5000, "OK");
 }
 
+LoRaWAN_Error_t LoRaWAN_Set_Battery(ATC_HandleTypeDef *lora, int level)
+{
+    // 1. Validate parameters
+    if (lora == NULL || lora->huart == NULL) {
+        return LORAWAN_ERROR_INVALID_PARAM;
+    }
+    if (level < 0 || level > 100) {
+        return LORAWAN_ERROR_INVALID_PARAM;
+    }
+
+    // 2. Build the AT command string
+    //    "AT+BAT=100\r\n" is 12 characters, so 16 bytes is plenty
+    char command[16];
+    int n = snprintf(command, sizeof(command), "AT+BAT=%d\r\n", level);
+    if (n < 0 || n >= (int)sizeof(command)) {
+        // formatting error or truncated
+        return LORAWAN_ERROR_INVALID_PARAM;
+    }
+
+    // 3. Send and wait for "OK"
+    char response[64];
+    return send_data_and_get_response(
+        lora,
+        command,
+        response,
+        sizeof(response),
+        5000,      // timeout in ms
+        "OK"       // expected response
+    );
+}
+
