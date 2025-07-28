@@ -80,9 +80,9 @@ UART_HandleTypeDef huart1;
 RTC_HandleTypeDef hrtc;
 
 /* USER CODE BEGIN PV */
-ATC_HandleTypeDef lora;
-int send_count = 0;
-uint32_t battery_value_adc;
+static ATC_HandleTypeDef lora;
+static int send_count = 0;
+static uint32_t battery_value_adc;
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
@@ -208,123 +208,80 @@ int main(void)
   MX_RTC_Init();
   MX_LPUART1_UART_Init();
   MX_ADC_Init();
-  /* USER CODE BEGIN 2 */
   RTC_WakeUp_Init();
 
-
-  uint32_t batt_voltage;
-  uint8_t batt_percentage;
+  uint32_t batt_voltage = 0;
+  uint8_t batt_percentage = 0;
   if (GetBatteryLevel(&batt_voltage, &batt_percentage) == BATTERY_OK) {
-	  ConsolePrintf(
-		  "Initial Battery: %lu mV (%d%%)\r\n",
-		  batt_voltage,       // pass the uint32_t mV directly
-		  batt_percentage     // pass the uint8_t directly
-	  );
+      ConsolePrintf("Initial Battery: %lu mV (%d%%)\r\n", batt_voltage, batt_percentage);
   }
-
-//  /* Scan the I2C bus and read sensors once at startup */
-//  scan_i2c_bus();
-//  sensor_init_and_read();
   LoRaWAN_Join(&lora);
-  /* USER CODE END 2 */
-
-  /* Infinite loop */
-  /* USER CODE BEGIN WHILE */
   ConsolePrintf("Entering main loop\r\n");
   while (1)
   {
-    /* USER CODE END WHILE */
-
-    /* USER CODE BEGIN 3 */
-    ConsolePrintf("Going to sleep...\r\n");
-
-    HAL_I2C_DeInit(&hi2c1);
-    HAL_UART_DeInit(&huart1);
-    // De-init LPUART1 (LoRaWAN UART)
-    HAL_UART_DeInit(&hlpuart1);
-    MX_ADC_DeInit();
-
-    // Disable LPUART wake-up from Stop mode
-    __HAL_UART_DISABLE_IT(&hlpuart1, UART_IT_RXNE);                    // Disable RXNE interrupt
-    __HAL_UART_DISABLE_IT(&hlpuart1, UART_IT_IDLE);                    // Disable IDLE interrupt
-    __HAL_UART_CLEAR_FLAG(&hlpuart1, UART_FLAG_RXNE | UART_FLAG_IDLE); // Clear any pending flags
-
-    __HAL_UART_DISABLE_IT(&huart1, UART_IT_RXNE);                    // Disable RXNE interrupt
-    __HAL_UART_DISABLE_IT(&huart1, UART_IT_IDLE);                    // Disable IDLE interrupt
-    __HAL_UART_CLEAR_FLAG(&huart1, UART_FLAG_RXNE | UART_FLAG_IDLE); // Clear any pending flags
-
-    // Enter Stop mode
-    Enter_Stop_Mode(); // Wakes up via RTC interrupt
-
-    // === Code resumes after wake-up ===
-    ConsolePrintf("Resumed after wake-up\r\n");
-
-    // Reconfigure clocks
-    SystemClock_Config();
-    ConsolePrintf("System clock reconfigured\r\n");
-
-    // Reinit I2C peripheral
-    MX_I2C1_Init();
-    ConsolePrintf("I2C1 reinitialized\r\n");
-
-    // Reinit UART
-    MX_USART1_UART_Init();
-    ConsolePrintf("UART reinitialized\r\n");
-
-    // Reinit LoRaWAN Module UART
-    MX_LPUART1_UART_Init();
-    ConsolePrintf("LPUART1 (lora) reinitialized\r\n");
-
-    // Reinit WakeUp timer (MUST be outside the callback!)
-    RTC_WakeUp_Init();
-    ConsolePrintf("RTC Wake-Up Timer reinitialized\r\n");
-
-    // Reinit ADC For battery monitoring (sometimes)
-    MX_ADC_Init();
-    ConsolePrintf("ADC reinitialized\r\n");
-
-    LoRaWAN_Error_t isConnected = LoRaWAN_Join_Status(&lora);
-    if (isConnected == LORAWAN_ERROR_OK)
-    {
-		// Measure battery voltage after waking up
-		uint32_t batt_voltage;
-		uint8_t batt_percentage;
-		if (GetBatteryLevel(&batt_voltage, &batt_percentage) == BATTERY_OK) {
-		  ConsolePrintf("Battery: %lu mV (%d%%)\r\n", batt_voltage, batt_percentage);
-		} else {
-		  ConsolePrintf("Battery measurement failed\r\n");
-		}
-
-
-		HAL_GPIO_WritePin(I2C_ENABLE_GPIO_Port, I2C_ENABLE_Pin, GPIO_PIN_SET);
-		HAL_Delay(300); // Short Delay to let voltage stabalize
-		scan_i2c_bus();
-		bool i2c_success = sensor_init_and_read();
-		HAL_GPIO_WritePin(I2C_ENABLE_GPIO_Port, I2C_ENABLE_Pin, GPIO_PIN_RESET);
-
-		if (i2c_success)
-		{
-			uint8_t payload[5];
-			payload[0] = (uint8_t)(calculated_temp >> 8);     // high byte
-			payload[1] = (uint8_t)(calculated_temp & 0xFF);   // low byte
-			payload[2] = calculated_hum;
-			payload[3] = (uint8_t)(batt_voltage >> 8);        // battery voltage high byte
-			payload[4] = batt_percentage;                     // battery percentage
-			LoRaWAN_SendHex(&lora, payload, 5);
-		}
-		else
-		{
-			uint8_t payload[2];
-			payload[0] = (uint8_t)(batt_voltage >> 8);        // battery voltage high byte
-			payload[1] = batt_percentage;                     // battery percentage
-			LoRaWAN_SendHex(&lora, payload, 2);
-		}
-    }
-    else
-    {
-    	ConsolePrintf("I am not joined, trying to join again...\r\n");
-    	LoRaWAN_Join(&lora);
-    }
+      ConsolePrintf("Going to sleep...\r\n");
+      HAL_I2C_DeInit(&hi2c1);
+      HAL_UART_DeInit(&huart1);
+      HAL_UART_DeInit(&hlpuart1);
+      MX_ADC_DeInit();
+      __HAL_UART_DISABLE_IT(&hlpuart1, UART_IT_RXNE);
+      __HAL_UART_DISABLE_IT(&hlpuart1, UART_IT_IDLE);
+      __HAL_UART_CLEAR_FLAG(&hlpuart1, UART_FLAG_RXNE | UART_FLAG_IDLE);
+      __HAL_UART_DISABLE_IT(&huart1, UART_IT_RXNE);
+      __HAL_UART_DISABLE_IT(&huart1, UART_IT_IDLE);
+      __HAL_UART_CLEAR_FLAG(&huart1, UART_FLAG_RXNE | UART_FLAG_IDLE);
+      Enter_Stop_Mode();
+      ConsolePrintf("Resumed after wake-up\r\n");
+      SystemClock_Config();
+      ConsolePrintf("System clock reconfigured\r\n");
+      MX_I2C1_Init();
+      ConsolePrintf("I2C1 reinitialized\r\n");
+      MX_USART1_UART_Init();
+      ConsolePrintf("UART reinitialized\r\n");
+      MX_LPUART1_UART_Init();
+      ConsolePrintf("LPUART1 (lora) reinitialized\r\n");
+      RTC_WakeUp_Init();
+      ConsolePrintf("RTC Wake-Up Timer reinitialized\r\n");
+      MX_ADC_Init();
+      ConsolePrintf("ADC reinitialized\r\n");
+      LoRaWAN_Error_t isConnected = LoRaWAN_Join_Status(&lora);
+      if (isConnected == LORAWAN_ERROR_OK)
+      {
+          uint32_t batt_voltage = 0;
+          uint8_t batt_percentage = 0;
+          if (GetBatteryLevel(&batt_voltage, &batt_percentage) == BATTERY_OK) {
+              ConsolePrintf("Battery: %lu mV (%d%%)\r\n", batt_voltage, batt_percentage);
+          } else {
+              ConsolePrintf("Battery measurement failed\r\n");
+          }
+          HAL_GPIO_WritePin(I2C_ENABLE_GPIO_Port, I2C_ENABLE_Pin, GPIO_PIN_SET);
+          HAL_Delay(300);
+          scan_i2c_bus();
+          bool i2c_success = sensor_init_and_read();
+          HAL_GPIO_WritePin(I2C_ENABLE_GPIO_Port, I2C_ENABLE_Pin, GPIO_PIN_RESET);
+          if (i2c_success)
+          {
+              uint8_t payload[5];
+              payload[0] = (uint8_t)(calculated_temp >> 8);
+              payload[1] = (uint8_t)(calculated_temp & 0xFF);
+              payload[2] = calculated_hum;
+              payload[3] = (uint8_t)(batt_voltage >> 8);
+              payload[4] = batt_percentage;
+              LoRaWAN_SendHex(&lora, payload, 5);
+          }
+          else
+          {
+              uint8_t payload[2];
+              payload[0] = (uint8_t)(batt_voltage >> 8);
+              payload[1] = batt_percentage;
+              LoRaWAN_SendHex(&lora, payload, 2);
+          }
+      }
+      else
+      {
+          ConsolePrintf("I am not joined, trying to join again...\r\n");
+          LoRaWAN_Join(&lora);
+      }
   }
   /* USER CODE END 3 */
 }

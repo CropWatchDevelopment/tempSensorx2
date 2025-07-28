@@ -2,10 +2,14 @@
 #include "lorawan.h"
 #include <string.h>
 #include <stdio.h>
+#include <stdbool.h>
 
 extern void ConsolePrintf(const char *format, ...);
 
-// Send an AT command and optionally check for an expected substring
+#define LORAWAN_MAX_CMD_LEN 64
+#define LORAWAN_MAX_HEX_LEN 128
+#define LORAWAN_MAX_RESP_LEN 256
+
 static int ATC_SendReceive(
     ATC_HandleTypeDef *lora,
     const char *command,
@@ -18,23 +22,16 @@ static int ATC_SendReceive(
     if (!lora || !lora->huart || !command || command_len == 0) {
         return -1;
     }
-
-    // Transmit command
     HAL_StatusTypeDef status = HAL_UART_Transmit(
         lora->huart,
-        (uint8_t *)command,
+        (const uint8_t *)command,
         command_len,
         timeout_ms
     );
     if (status != HAL_OK) {
-        ConsolePrintf("ATC_SendReceive: TX failed (status=%d) for '%.*s'\r\n",
-                      (int)status,
-                      (int)command_len,
-                      command);
+        ConsolePrintf("ATC_SendReceive: TX failed (status=%d)\r\n", (int)status);
         return -2;
     }
-
-    // Receive response
     if (response && response_size > 0) {
         uint16_t rx_len = 0;
         memset(response, 0, response_size);
@@ -45,47 +42,33 @@ static int ATC_SendReceive(
             &rx_len,
             timeout_ms
         );
-        ConsolePrintf("ATC_SendReceive: RX status=%d, rx_len=%u\r\n",
-                      (int)status,
-                      (unsigned)rx_len);
-        if (rx_len) {
-            ConsolePrintf("ATC_SendReceive: RX '%.*s'\r\n",
-                          (int)rx_len,
-                          response);
-        }
         if (status != HAL_OK) {
+            ConsolePrintf("ATC_SendReceive: RX failed (status=%d)\r\n", (int)status);
             return -4;
         }
+        response[rx_len] = '\0';
     }
-
-    // Validate expected substring
     if (expected_response && response) {
         if (!strstr(response, expected_response)) {
+            ConsolePrintf("ATC_SendReceive: expected response '%s' not found\r\n", expected_response);
             return -3;
         }
     }
-
     return 0;
 }
 
-// Wake module: send "AT" and parse the combined WAKE+OK or OK banner
 static LoRaWAN_Error_t wake_module(
     ATC_HandleTypeDef *lora,
     char *response,
     uint32_t response_size,
     uint32_t timeout_ms
 ) {
-    // Flush UART RX FIFO
-    __HAL_UART_CLEAR_OREFLAG(lora->huart);
-    __HAL_UART_CLEAR_IDLEFLAG(lora->huart);
     uint8_t dummy;
-    while (__HAL_UART_GET_FLAG(lora->huart, UART_FLAG_RXNE)) {
-        HAL_UART_Receive(lora->huart, &dummy, 1, 10);
+    // Flush RX FIFO by reading until no more data
+    while (HAL_UART_Receive(lora->huart, &dummy, 1, 1) == HAL_OK) {
+        // do nothing
     }
-
-    // Send AT and read banner
-    const char *wake_cmd = "AT\r\n";
-    ConsolePrintf("wake_module: sending AT and capturing banner\r\n");
+    static const char wake_cmd[] = "AT\r\n";
     int rc = ATC_SendReceive(
         lora,
         wake_cmd,
@@ -99,14 +82,7 @@ static LoRaWAN_Error_t wake_module(
         ConsolePrintf("wake_module: AT transmit error (rc=%d)\r\n", rc);
         return LORAWAN_ERROR_COMMUNICATION;
     }
-
-    // Give module time to send the rest of the banner
     HAL_Delay(100);
-
-    // response already holds full banner
-    ConsolePrintf("wake_module: banner='%s'\r\n", response);
-
-    // Check for WAKE or OK
     if (strstr(response, "WAKE") || strstr(response, "OK")) {
         return LORAWAN_ERROR_OK;
     }
@@ -124,8 +100,6 @@ LoRaWAN_Error_t send_data_and_get_response(
     if (!lora || !lora->huart || !data || !response || response_size == 0) {
         return LORAWAN_ERROR_INVALID_PARAM;
     }
-
-    // Wake the module
     LoRaWAN_Error_t wake_status = wake_module(
         lora,
         response,
@@ -135,11 +109,7 @@ LoRaWAN_Error_t send_data_and_get_response(
     if (wake_status != LORAWAN_ERROR_OK) {
         return wake_status;
     }
-
     HAL_Delay(50);
-    ConsolePrintf("send_data_and_get_response: sending '%s'\r\n", data);
-
-    // Send real command and validate response
     int res = ATC_SendReceive(
         lora,
         data,
@@ -159,8 +129,7 @@ LoRaWAN_Error_t send_data_and_get_response(
 }
 
 LoRaWAN_Error_t LoRaWAN_Join(ATC_HandleTypeDef *lora) {
-    char response[256] = {0};
-    ConsolePrintf("LoRaWAN_Join: start\r\n");
+    char response[LORAWAN_MAX_RESP_LEN] = {0};
     LoRaWAN_Error_t status = send_data_and_get_response(
         lora,
         "AT+JOIN\r\n",
@@ -172,8 +141,6 @@ LoRaWAN_Error_t LoRaWAN_Join(ATC_HandleTypeDef *lora) {
     if (status != LORAWAN_ERROR_OK) {
         return status;
     }
-
-    // Wait for JOINED or JOIN FAILED
     memset(response, 0, sizeof(response));
     uint16_t rx_len = 0;
     if (HAL_UARTEx_ReceiveToIdle(
@@ -185,7 +152,6 @@ LoRaWAN_Error_t LoRaWAN_Join(ATC_HandleTypeDef *lora) {
         ) == HAL_OK) {
         response[rx_len] = '\0';
     }
-    ConsolePrintf("LoRaWAN_Join: async banner '%s'\r\n", response);
     if (strstr(response, "JOINED")) {
         return LORAWAN_ERROR_OK;
     }
@@ -200,21 +166,19 @@ LoRaWAN_Error_t LoRaWAN_SendHex(
     const uint8_t *payload,
     size_t length
 ) {
-    if (!lora || !lora->huart || !payload || length == 0) {
+    if (!lora || !lora->huart || !payload || length == 0 || length > (LORAWAN_MAX_HEX_LEN/2)) {
         return LORAWAN_ERROR_INVALID_PARAM;
     }
-    // Convert payload to hex string
-    char hex[2 * length + 1];
+    char hex[LORAWAN_MAX_HEX_LEN + 1];
     for (size_t i = 0; i < length; ++i) {
-        sprintf(&hex[2 * i], "%02X", payload[i]);
+        snprintf(&hex[2 * i], 3, "%02X", payload[i]);
     }
     hex[2 * length] = '\0';
-
-    // Build AT+SEND command
-    char cmd[2 * length + 12];
-    snprintf(cmd, sizeof(cmd), "AT+SEND \"%s\"\r\n", hex);
-
-    // Local response buffer
+    char cmd[LORAWAN_MAX_CMD_LEN];
+    int n = snprintf(cmd, sizeof(cmd), "AT+SEND \"%s\"\r\n", hex);
+    if (n < 0 || n >= (int)sizeof(cmd)) {
+        return LORAWAN_ERROR_INVALID_PARAM;
+    }
     char response[64] = {0};
     return send_data_and_get_response(
         lora,
