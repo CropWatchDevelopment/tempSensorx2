@@ -1,28 +1,64 @@
+/* lorawan.c - Clean, valid C implementation for LoRaWAN AT commands */
 #include "lorawan.h"
 #include <string.h>
 #include <stdio.h>
 
-static int ATC_SendReceive(ATC_HandleTypeDef *lora, const char *command, uint32_t command_len, char *response, uint32_t response_size, uint32_t timeout_ms, const char *expected_response)
-{
-    if (lora == NULL || lora->huart == NULL || command == NULL || command_len == 0) {
+extern void ConsolePrintf(const char *format, ...);
+
+// Send an AT command and optionally check for an expected substring
+static int ATC_SendReceive(
+    ATC_HandleTypeDef *lora,
+    const char *command,
+    uint32_t command_len,
+    char *response,
+    uint32_t response_size,
+    uint32_t timeout_ms,
+    const char *expected_response
+) {
+    if (!lora || !lora->huart || !command || command_len == 0) {
         return -1;
     }
 
-    HAL_StatusTypeDef status = HAL_UART_Transmit(lora->huart, (uint8_t *)command, command_len, timeout_ms);
+    // Transmit command
+    HAL_StatusTypeDef status = HAL_UART_Transmit(
+        lora->huart,
+        (uint8_t *)command,
+        command_len,
+        timeout_ms
+    );
     if (status != HAL_OK) {
+        ConsolePrintf("ATC_SendReceive: TX failed (status=%d) for '%.*s'\r\n",
+                      (int)status,
+                      (int)command_len,
+                      command);
         return -2;
     }
 
-    if (response != NULL && response_size > 0) {
+    // Receive response
+    if (response && response_size > 0) {
         uint16_t rx_len = 0;
         memset(response, 0, response_size);
-        status = HAL_UARTEx_ReceiveToIdle(lora->huart, (uint8_t *)response, response_size - 1, &rx_len, timeout_ms);
+        status = HAL_UARTEx_ReceiveToIdle(
+            lora->huart,
+            (uint8_t *)response,
+            response_size - 1,
+            &rx_len,
+            timeout_ms
+        );
+        ConsolePrintf("ATC_SendReceive: RX status=%d, rx_len=%u\r\n",
+                      (int)status,
+                      (unsigned)rx_len);
+        if (rx_len) {
+            ConsolePrintf("ATC_SendReceive: RX '%.*s'\r\n",
+                          (int)rx_len,
+                          response);
+        }
         if (status != HAL_OK) {
             return -4;
         }
-        response[rx_len] = '\0';
     }
 
+    // Validate expected substring
     if (expected_response && response) {
         if (!strstr(response, expected_response)) {
             return -3;
@@ -32,168 +68,198 @@ static int ATC_SendReceive(ATC_HandleTypeDef *lora, const char *command, uint32_
     return 0;
 }
 
-LoRaWAN_Error_t send_data_and_get_response(ATC_HandleTypeDef *lora, const char *data, char *response, uint32_t response_size, uint32_t timeout_ms, const char *expected_response)
-{
+// Wake module: send "AT" and parse the combined WAKE+OK or OK banner
+static LoRaWAN_Error_t wake_module(
+    ATC_HandleTypeDef *lora,
+    char *response,
+    uint32_t response_size,
+    uint32_t timeout_ms
+) {
+    // Flush UART RX FIFO
+    __HAL_UART_CLEAR_OREFLAG(lora->huart);
+    __HAL_UART_CLEAR_IDLEFLAG(lora->huart);
+    uint8_t dummy;
+    while (__HAL_UART_GET_FLAG(lora->huart, UART_FLAG_RXNE)) {
+        HAL_UART_Receive(lora->huart, &dummy, 1, 10);
+    }
+
+    // Send AT and read banner
+    const char *wake_cmd = "AT\r\n";
+    ConsolePrintf("wake_module: sending AT and capturing banner\r\n");
+    int rc = ATC_SendReceive(
+        lora,
+        wake_cmd,
+        (uint32_t)strlen(wake_cmd),
+        response,
+        response_size,
+        timeout_ms,
+        NULL
+    );
+    if (rc != 0) {
+        ConsolePrintf("wake_module: AT transmit error (rc=%d)\r\n", rc);
+        return LORAWAN_ERROR_COMMUNICATION;
+    }
+
+    // Give module time to send the rest of the banner
+    HAL_Delay(100);
+
+    // response already holds full banner
+    ConsolePrintf("wake_module: banner='%s'\r\n", response);
+
+    // Check for WAKE or OK
+    if (strstr(response, "WAKE") || strstr(response, "OK")) {
+        return LORAWAN_ERROR_OK;
+    }
+    return LORAWAN_ERROR_COMMUNICATION;
+}
+
+LoRaWAN_Error_t send_data_and_get_response(
+    ATC_HandleTypeDef *lora,
+    const char *data,
+    char *response,
+    uint32_t response_size,
+    uint32_t timeout_ms,
+    const char *expected_response
+) {
     if (!lora || !lora->huart || !data || !response || response_size == 0) {
         return LORAWAN_ERROR_INVALID_PARAM;
     }
 
-    // Wake Module from Sleep (if it is asleep)
-    ATC_SendReceive(lora, "AT\r\n", 4, response, response_size, timeout_ms, expected_response);
-    HAL_Delay(300);
-
-    char* isConnectedResponse = NULL;
-    int isConnectedStatus = ATC_SendReceive(lora, "ATI 3001\r\n", 10, isConnectedResponse, response_size, 300, "1");
-    if (isConnectedStatus == 0)
-    {
-    	LoRaWAN_Join(lora);
+    // Wake the module
+    LoRaWAN_Error_t wake_status = wake_module(
+        lora,
+        response,
+        response_size,
+        timeout_ms
+    );
+    if (wake_status != LORAWAN_ERROR_OK) {
+        return wake_status;
     }
 
-    int result = ATC_SendReceive(lora, data, strlen(data), response, response_size, timeout_ms, expected_response);
+    HAL_Delay(50);
+    ConsolePrintf("send_data_and_get_response: sending '%s'\r\n", data);
 
-    if (result == -1) {
-        return LORAWAN_ERROR_INVALID_PARAM;
-    } else if (result == -2) {
-        return LORAWAN_ERROR_COMMUNICATION;
-    } else if (result == -3) {
-        return LORAWAN_ERROR_UNEXPECTED_RESPONSE;
-    } else if (result == -4) {
-        return LORAWAN_ERROR_TIMEOUT;
+    // Send real command and validate response
+    int res = ATC_SendReceive(
+        lora,
+        data,
+        (uint32_t)strlen(data),
+        response,
+        response_size,
+        timeout_ms,
+        expected_response
+    );
+    switch (res) {
+        case -1: return LORAWAN_ERROR_INVALID_PARAM;
+        case -2: return LORAWAN_ERROR_COMMUNICATION;
+        case -3: return LORAWAN_ERROR_UNEXPECTED_RESPONSE;
+        case -4: return LORAWAN_ERROR_TIMEOUT;
+        default:  return LORAWAN_ERROR_OK;
     }
-
-    return LORAWAN_ERROR_OK;
 }
 
-LoRaWAN_Error_t LoRaWAN_Join(ATC_HandleTypeDef *lora)
-{
-    char response[256];
-    LoRaWAN_Error_t status = send_data_and_get_response(lora, "AT+JOIN\r\n", response, sizeof(response), 10000, "OK");
+LoRaWAN_Error_t LoRaWAN_Join(ATC_HandleTypeDef *lora) {
+    char response[256] = {0};
+    ConsolePrintf("LoRaWAN_Join: start\r\n");
+    LoRaWAN_Error_t status = send_data_and_get_response(
+        lora,
+        "AT+JOIN\r\n",
+        response,
+        sizeof(response),
+        10000,
+        "OK"
+    );
     if (status != LORAWAN_ERROR_OK) {
         return status;
     }
 
+    // Wait for JOINED or JOIN FAILED
     memset(response, 0, sizeof(response));
     uint16_t rx_len = 0;
-    HAL_StatusTypeDef hal_status = HAL_UARTEx_ReceiveToIdle(lora->huart, (uint8_t *)response, sizeof(response) - 1, &rx_len, 10000);
-    if (hal_status != HAL_OK) {
-        return LORAWAN_ERROR_TIMEOUT;
+    if (HAL_UARTEx_ReceiveToIdle(
+            lora->huart,
+            (uint8_t *)response,
+            sizeof(response) - 1,
+            &rx_len,
+            10000
+        ) == HAL_OK) {
+        response[rx_len] = '\0';
     }
-    response[rx_len] = '\0';
-
+    ConsolePrintf("LoRaWAN_Join: async banner '%s'\r\n", response);
     if (strstr(response, "JOINED")) {
         return LORAWAN_ERROR_OK;
-    } else if (strstr(response, "JOIN FAILED")) {
+    }
+    if (strstr(response, "JOIN FAILED")) {
         return LORAWAN_ERROR_NOT_JOINED;
     }
     return LORAWAN_ERROR_UNEXPECTED_RESPONSE;
 }
 
-LoRaWAN_Error_t LoRaWAN_SendHex(ATC_HandleTypeDef *lora, const uint8_t *payload, size_t length)
-{
+LoRaWAN_Error_t LoRaWAN_SendHex(
+    ATC_HandleTypeDef *lora,
+    const uint8_t *payload,
+    size_t length
+) {
     if (!lora || !lora->huart || !payload || length == 0) {
         return LORAWAN_ERROR_INVALID_PARAM;
     }
-
-    char hex[length * 2 + 1];
+    // Convert payload to hex string
+    char hex[2 * length + 1];
     for (size_t i = 0; i < length; ++i) {
-        sprintf(&hex[i * 2], "%02X", payload[i]);
+        sprintf(&hex[2 * i], "%02X", payload[i]);
     }
-    hex[length * 2] = '\0';
+    hex[2 * length] = '\0';
 
-    char command[length * 2 + 12];
-    snprintf(command, sizeof(command), "AT+SEND \"%s\"\r\n", hex);
+    // Build AT+SEND command
+    char cmd[2 * length + 12];
+    snprintf(cmd, sizeof(cmd), "AT+SEND \"%s\"\r\n", hex);
 
-    char response[64];
-    return send_data_and_get_response(lora, command, response, sizeof(response), 5000, "OK");
-}
-
-LoRaWAN_Error_t LoRaWAN_Set_Battery(ATC_HandleTypeDef *lora, int level)
-{
-    // 1. Validate parameters
-    if (lora == NULL || lora->huart == NULL) {
-        return LORAWAN_ERROR_INVALID_PARAM;
-    }
-    if (level < 0 || level > 100) {
-        return LORAWAN_ERROR_INVALID_PARAM;
-    }
-
-    // 2. Map percentage (0-100) to LoRaWAN battery status (1-254)
-    //    0% maps to 1 (minimum)
-    //    100% maps to 254 (maximum)
-    //    Formula: battery_status = 1 + (level * 253) / 100
-    int battery_status;
-    if (level == 0) {
-        battery_status = 1;  // Minimum battery level
-    } else {
-        battery_status = 1 + (level * 253) / 100;
-        // Ensure we don't exceed 254
-        if (battery_status > 254) {
-            battery_status = 254;
-        }
-    }
-
-    // 3. Build the AT command string
-    char command[16];
-    int n = snprintf(command, sizeof(command), "AT+BAT=%d\r\n", battery_status);
-    if (n < 0 || n >= (int)sizeof(command)) {
-        // formatting error or truncated
-        return LORAWAN_ERROR_INVALID_PARAM;
-    }
-
-    // 4. Send and wait for "OK"
-    char response[64];
+    // Local response buffer
+    char response[64] = {0};
     return send_data_and_get_response(
         lora,
-        command,
+        cmd,
         response,
         sizeof(response),
-        5000,      // timeout in ms
-        "OK"       // expected response
+        5000,
+        "OK"
     );
 }
 
-LoRaWAN_Error_t LoRaWAN_Set_Battery_Status(ATC_HandleTypeDef *lora, uint8_t battery_percentage, int measurement_success)
-{
-    // 1. Validate parameters
-    if (lora == NULL || lora->huart == NULL) {
-        return LORAWAN_ERROR_INVALID_PARAM;
-    }
-
-    int battery_status;
-    
-    // 2. Determine battery status based on measurement success
-    if (!measurement_success) {
-        // Battery measurement failed - use 255 (unable to measure)
-        battery_status = 255;
-    } else {
-        // Battery measurement succeeded - map percentage (0-100) to LoRaWAN battery status (1-254)
-        if (battery_percentage == 0) {
-            battery_status = 1;  // Minimum battery level
-        } else if (battery_percentage >= 100) {
-            battery_status = 254;  // Maximum battery level
-        } else {
-            battery_status = 1 + (battery_percentage * 253) / 100;
-        }
-    }
-
-    // 3. Build the AT command string
-    char command[16];
-
-    int n = snprintf(command, sizeof(command), "AT+BAT=%d\r\n", battery_status);
-    if (n < 0 || n >= (int)sizeof(command)) {
-        // formatting error or truncated
-        return LORAWAN_ERROR_INVALID_PARAM;
-    }
-
-    // 4. Send and wait for "OK"
-    char response[64];
-    return send_data_and_get_response(
+LoRaWAN_Error_t LoRaWAN_Join_Status(ATC_HandleTypeDef *lora) {
+    char resp[32] = {0};
+    LoRaWAN_Error_t st = send_data_and_get_response(
         lora,
-        command,
-        response,
-        sizeof(response),
-        5000,      // timeout in ms
-        "OK"       // expected response
+        "ATI 3001\r\n",
+        resp,
+        sizeof(resp),
+        300,
+        "1"
     );
+    return (st == LORAWAN_ERROR_OK && strstr(resp, "1"))
+        ? LORAWAN_ERROR_OK
+        : LORAWAN_ERROR_NOT_JOINED;
 }
 
+LoRaWAN_Error_t LoRaWAN_Set_Battery(
+    ATC_HandleTypeDef *lora,
+    int level
+) {
+    if (!lora || !lora->huart || level < 0 || level > 100) {
+        return LORAWAN_ERROR_INVALID_PARAM;
+    }
+    char cmd[16];
+    int len = snprintf(cmd, sizeof(cmd), "AT+BAT=%d\r\n", level);
+    if (len < 0 || len >= (int)sizeof(cmd)) {
+        return LORAWAN_ERROR_INVALID_PARAM;
+    }
+    char response[64] = {0};
+    return send_data_and_get_response(
+        lora,
+        cmd,
+        response,
+        sizeof(response),
+        5000,
+        "OK"
+    );
+}

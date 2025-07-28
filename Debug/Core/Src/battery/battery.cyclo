@@ -1,2 +1,2 @@
-../Core/Src/battery/battery.c:19:7:ReadBatteryVoltage	3
-../Core/Src/battery/battery.c:53:18:GetBatteryLevel	6
+../Core/Src/battery/battery.c:23:9:ReadBatteryVoltage	3
+../Core/Src/battery/battery.c:59:18:GetBatteryLevel	6

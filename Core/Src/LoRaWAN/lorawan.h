@@ -14,12 +14,17 @@ typedef enum {
     LORAWAN_ERROR_NOT_JOINED = -5
 } LoRaWAN_Error_t;
 
+typedef enum {
+	JOIN_TIMEOUT_MS = 10000,
+} LoRaWAN_JOIN_t;
+
 typedef struct {
     UART_HandleTypeDef *huart;
 } ATC_HandleTypeDef;
 
 LoRaWAN_Error_t send_data_and_get_response(ATC_HandleTypeDef *lora, const char *data, char *response, uint32_t response_size, uint32_t timeout_ms, const char *expected_response);
 LoRaWAN_Error_t LoRaWAN_Join(ATC_HandleTypeDef *lora);
+LoRaWAN_Error_t LoRaWAN_Join_Status(ATC_HandleTypeDef *lora);
 LoRaWAN_Error_t LoRaWAN_SendHex(ATC_HandleTypeDef *lora, const uint8_t *payload, size_t length);
 
 // Setup commands

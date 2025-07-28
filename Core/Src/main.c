@@ -52,10 +52,6 @@
 #define DATA_RATE 0
 #define JOIN_TIMEOUT_MS 10000
 
-// LORAWAN DEFINES
-#define AT_CMD_PREFIX "AT+SEND \""
-#define AT_CMD_SUFFIX "\"\r\n"
-
 // I2C DEFINES
 #define SHT40_I2C_ADDR (0x44 << 1)        // SHT40 I2C address (shifted for HAL)
 #define SHT40_MEASURE_HIGH_PRECISION 0xFD // High-precision measurement command
@@ -224,12 +220,6 @@ int main(void)
 		  batt_voltage,       // pass the uint32_t mV directly
 		  batt_percentage     // pass the uint8_t directly
 	  );
-	  // Set battery status in LoRaWAN module
-	  LoRaWAN_Set_Battery_Status(&lora, batt_percentage, 1);
-  } else {
-	  ConsolePrintf("Initial battery measurement failed\r\n");
-	  // Set battery status as unmeasurable
-	  LoRaWAN_Set_Battery_Status(&lora, 0, 0);
   }
 
 //  /* Scan the I2C bus and read sensors once at startup */
@@ -293,38 +283,47 @@ int main(void)
     MX_ADC_Init();
     ConsolePrintf("ADC reinitialized\r\n");
 
-    // Measure battery voltage after waking up
-    uint32_t batt_voltage;
-    uint8_t batt_percentage;
-    if (GetBatteryLevel(&batt_voltage, &batt_percentage) == BATTERY_OK) {
-      ConsolePrintf("Battery: %lu mV (%d%%)\r\n", batt_voltage, batt_percentage);
-      // Update battery status in LoRaWAN module
-      LoRaWAN_Set_Battery_Status(&lora, batt_percentage, 1);
-    }
-
-
-    HAL_GPIO_WritePin(I2C_ENABLE_GPIO_Port, I2C_ENABLE_Pin, GPIO_PIN_SET);
-    HAL_Delay(300); // Short Delay to let voltage stabalize
-    scan_i2c_bus();
-    bool i2c_success = sensor_init_and_read();
-    HAL_GPIO_WritePin(I2C_ENABLE_GPIO_Port, I2C_ENABLE_Pin, GPIO_PIN_RESET);
-
-    if (i2c_success)
+    LoRaWAN_Error_t isConnected = LoRaWAN_Join_Status(&lora);
+    if (isConnected == LORAWAN_ERROR_OK)
     {
-		uint8_t payload[5];
-		payload[0] = (uint8_t)(calculated_temp >> 8);     // high byte
-		payload[1] = (uint8_t)(calculated_temp & 0xFF);   // low byte
-		payload[2] = calculated_hum;
-		payload[3] = (uint8_t)(batt_voltage >> 8);        // battery voltage high byte
-		payload[4] = batt_percentage;                     // battery percentage
-		LoRaWAN_SendHex(&lora, payload, 5);
+		// Measure battery voltage after waking up
+		uint32_t batt_voltage;
+		uint8_t batt_percentage;
+		if (GetBatteryLevel(&batt_voltage, &batt_percentage) == BATTERY_OK) {
+		  ConsolePrintf("Battery: %lu mV (%d%%)\r\n", batt_voltage, batt_percentage);
+		} else {
+		  ConsolePrintf("Battery measurement failed\r\n");
+		}
+
+
+		HAL_GPIO_WritePin(I2C_ENABLE_GPIO_Port, I2C_ENABLE_Pin, GPIO_PIN_SET);
+		HAL_Delay(300); // Short Delay to let voltage stabalize
+		scan_i2c_bus();
+		bool i2c_success = sensor_init_and_read();
+		HAL_GPIO_WritePin(I2C_ENABLE_GPIO_Port, I2C_ENABLE_Pin, GPIO_PIN_RESET);
+
+		if (i2c_success)
+		{
+			uint8_t payload[5];
+			payload[0] = (uint8_t)(calculated_temp >> 8);     // high byte
+			payload[1] = (uint8_t)(calculated_temp & 0xFF);   // low byte
+			payload[2] = calculated_hum;
+			payload[3] = (uint8_t)(batt_voltage >> 8);        // battery voltage high byte
+			payload[4] = batt_percentage;                     // battery percentage
+			LoRaWAN_SendHex(&lora, payload, 5);
+		}
+		else
+		{
+			uint8_t payload[2];
+			payload[0] = (uint8_t)(batt_voltage >> 8);        // battery voltage high byte
+			payload[1] = batt_percentage;                     // battery percentage
+			LoRaWAN_SendHex(&lora, payload, 2);
+		}
     }
     else
     {
-		uint8_t payload[2];
-		payload[0] = (uint8_t)(batt_voltage >> 8);        // battery voltage high byte
-		payload[1] = batt_percentage;                     // battery percentage
-		LoRaWAN_SendHex(&lora, payload, 2);
+    	ConsolePrintf("I am not joined, trying to join again...\r\n");
+    	LoRaWAN_Join(&lora);
     }
   }
   /* USER CODE END 3 */
