@@ -83,12 +83,13 @@ int16_t UPLINK_COUNT = 0;
 
 /* Private function prototypes -----------------------------------------------*/
 void SystemClock_Config(void);
-static void MX_GPIO_Init(void);
-static void MX_I2C1_Init(void);
-static void MX_USART1_UART_Init(void);
+void MX_GPIO_Init(void);
+void MX_I2C1_Init(void);
+void MX_USART1_UART_Init(void);
 static void MX_RTC_Init(void);
-static void MX_LPUART1_UART_Init(void);
-static void MX_ADC_Init(void);
+void MX_LPUART1_UART_Init(void);
+void MX_ADC_Init(void);
+void MX_ADC_DeInit(void);
 /* USER CODE BEGIN PFP */
 void ConsolePrintf(const char *format, ...);
 /* USER CODE END PFP */
@@ -132,19 +133,12 @@ int main(void)
   MX_RTC_Init();
   MX_LPUART1_UART_Init();
   MX_ADC_Init();
-  /* USER CODE BEGIN 2 */
   RTC_WakeUp_Init();
   LoRaWAN_Join(&lora);
   LoRaWAN_UpdateBattery(&lora);
-  /* USER CODE END 2 */
 
-  /* Infinite loop */
-  /* USER CODE BEGIN WHILE */
   while (1)
   {
-    /* USER CODE END WHILE */
-
-    /* USER CODE BEGIN 3 */
 	  enter_sleep_mode();
 	  LoRaWAN_Error_t isConnected = LoRaWAN_Join_Status(&lora);
 	        if (isConnected == LORAWAN_ERROR_OK)
@@ -248,14 +242,12 @@ void SystemClock_Config(void)
   * @param None
   * @retval None
   */
-static void MX_ADC_Init(void)
+void MX_ADC_Init(void)
 {
 
   /* USER CODE BEGIN ADC_Init 0 */
 
   /* USER CODE END ADC_Init 0 */
-
-  ADC_ChannelConfTypeDef sConfig = {0};
 
   /* USER CODE BEGIN ADC_Init 1 */
 
@@ -277,38 +269,16 @@ static void MX_ADC_Init(void)
   hadc.Init.DMAContinuousRequests = DISABLE;
   hadc.Init.EOCSelection = ADC_EOC_SINGLE_CONV;
   hadc.Init.Overrun = ADC_OVR_DATA_PRESERVED;
-  hadc.Init.LowPowerAutoWait = DISABLE;
+  hadc.Init.LowPowerAutoWait = ENABLE;
   hadc.Init.LowPowerFrequencyMode = ENABLE;
-  hadc.Init.LowPowerAutoPowerOff = DISABLE;
+  hadc.Init.LowPowerAutoPowerOff = ENABLE;
   if (HAL_ADC_Init(&hadc) != HAL_OK)
   {
     Error_Handler();
   }
 
-  /** Configure for the selected ADC regular channel to be converted.
-  */
-  sConfig.Channel = ADC_CHANNEL_0;
-  sConfig.Rank = ADC_RANK_CHANNEL_NUMBER;
-  if (HAL_ADC_ConfigChannel(&hadc, &sConfig) != HAL_OK)
-  {
-    Error_Handler();
-  }
-
-  /** Configure for the selected ADC regular channel to be converted.
-  */
-  sConfig.Channel = ADC_CHANNEL_TEMPSENSOR;
-  if (HAL_ADC_ConfigChannel(&hadc, &sConfig) != HAL_OK)
-  {
-    Error_Handler();
-  }
-
-  /** Configure for the selected ADC regular channel to be converted.
-  */
-  sConfig.Channel = ADC_CHANNEL_VREFINT;
-  if (HAL_ADC_ConfigChannel(&hadc, &sConfig) != HAL_OK)
-  {
-    Error_Handler();
-  }
+  // Note: Channel configuration is done dynamically in battery measurement function
+  // to minimize power consumption
   /* USER CODE BEGIN ADC_Init 2 */
 
   /* USER CODE END ADC_Init 2 */
@@ -320,7 +290,7 @@ static void MX_ADC_Init(void)
   * @param None
   * @retval None
   */
-static void MX_I2C1_Init(void)
+void MX_I2C1_Init(void)
 {
 
   /* USER CODE BEGIN I2C1_Init 0 */
@@ -368,7 +338,7 @@ static void MX_I2C1_Init(void)
   * @param None
   * @retval None
   */
-static void MX_LPUART1_UART_Init(void)
+void MX_LPUART1_UART_Init(void)
 {
 
   /* USER CODE BEGIN LPUART1_Init 0 */
@@ -402,7 +372,7 @@ static void MX_LPUART1_UART_Init(void)
   * @param None
   * @retval None
   */
-static void MX_USART1_UART_Init(void)
+void MX_USART1_UART_Init(void)
 {
 
   /* USER CODE BEGIN USART1_Init 0 */
@@ -473,7 +443,7 @@ static void MX_RTC_Init(void)
   * @param None
   * @retval None
   */
-static void MX_GPIO_Init(void)
+void MX_GPIO_Init(void)
 {
   GPIO_InitTypeDef GPIO_InitStruct = {0};
   /* USER CODE BEGIN MX_GPIO_Init_1 */
@@ -485,7 +455,7 @@ static void MX_GPIO_Init(void)
   __HAL_RCC_GPIOB_CLK_ENABLE();
 
   /*Configure GPIO pin Output Level */
-  HAL_GPIO_WritePin(VBAT_MEAS_EN_GPIO_Port, VBAT_MEAS_EN_Pin, GPIO_PIN_SET);
+  HAL_GPIO_WritePin(VBAT_MEAS_EN_GPIO_Port, VBAT_MEAS_EN_Pin, GPIO_PIN_RESET);
 
   /*Configure GPIO pin Output Level */
   HAL_GPIO_WritePin(I2C_ENABLE_GPIO_Port, I2C_ENABLE_Pin, GPIO_PIN_RESET);
@@ -509,31 +479,6 @@ static void MX_GPIO_Init(void)
 }
 
 /* USER CODE BEGIN 4 */
-// Wrapper functions for sleep module to access static initialization functions
-void SystemClock_Config_Wrapper(void) {
-    SystemClock_Config();
-}
-
-void MX_GPIO_Init_Wrapper(void) {
-    MX_GPIO_Init();
-}
-
-void MX_I2C1_Init_Wrapper(void) {
-    MX_I2C1_Init();
-}
-
-void MX_USART1_UART_Init_Wrapper(void) {
-    MX_USART1_UART_Init();
-}
-
-void MX_LPUART1_UART_Init_Wrapper(void) {
-    MX_LPUART1_UART_Init();
-}
-
-void MX_ADC_Init_Wrapper(void) {
-    MX_ADC_Init();
-}
-
 void ConsolePrintf(const char *format, ...)
 {
   char buffer[128];          // Buffer for the original message
@@ -566,6 +511,9 @@ void ConsolePrintf(const char *format, ...)
 // Add this function to your main.c for even more power savings
 void configure_system_for_ultra_low_power(void)
 {
+    // Disable all unnecessary peripheral clocks
+    __HAL_RCC_CRC_CLK_DISABLE();
+    
     // Configure unused pins as analog inputs
     configure_gpio_for_low_power();
     

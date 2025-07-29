@@ -1,0 +1,11 @@
+
+1. MOVED CUSTOM INITIALIZATION CALLS to USER CODE BEGIN 2:
+   - RTC_WakeUp_Init();
+   - LoRaWAN_Join(&lora);
+   - LoRaWAN_UpdateBattery(&lora);
+
+2. ADDED MISSING USER CODE SECTIONS:
+   - Added /* USER CODE BEGIN 3 */ in main loop
+   - Properly structured WHILE loop with USER CODE sections
+
+3. BACKUP CREATED: Core/Src/main.c.backup

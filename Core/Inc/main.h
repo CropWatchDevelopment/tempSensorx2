@@ -60,15 +60,15 @@ extern UART_HandleTypeDef hlpuart1;
 extern UART_HandleTypeDef huart1;
 extern RTC_HandleTypeDef hrtc;
 
-// Function declarations
-void SystemClock_Config(void);
-void MX_GPIO_Init(void);
-void MX_I2C1_Init(void);
-void MX_USART1_UART_Init(void);
-void MX_LPUART1_UART_Init(void);
-void MX_ADC_Init(void);
+/* USER CODE BEGIN EFP */
 void ConsolePrintf(const char *format, ...);
-
+// Wrapper functions for sleep module
+void SystemClock_Config_Wrapper(void);
+void MX_GPIO_Init_Wrapper(void);
+void MX_I2C1_Init_Wrapper(void);
+void MX_USART1_UART_Init_Wrapper(void);
+void MX_LPUART1_UART_Init_Wrapper(void);
+void MX_ADC_Init_Wrapper(void);
 /* USER CODE END EFP */
 
 /* Private defines -----------------------------------------------------------*/

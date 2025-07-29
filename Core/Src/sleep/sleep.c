@@ -7,83 +7,97 @@
 #include "main.h"
 #include "stm32l0xx_hal.h"
 #include "stm32l0xx_hal_rcc.h"
+#include "stm32l0xx_hal_pwr.h"
+#include "stm32l0xx_hal_gpio.h"
+#include "stm32l0xx_hal_rtc.h"
 #include "sleep.h"
 
 void enter_sleep_mode()
 {
 	ConsolePrintf("Going to sleep...\r\n");
 	
-	// Disable peripheral clocks during sleep mode for maximum power saving
-	__HAL_RCC_ADC1_CLK_SLEEP_DISABLE();
-	__HAL_RCC_I2C1_CLK_SLEEP_DISABLE(); 
-	__HAL_RCC_USART1_CLK_SLEEP_DISABLE();
-	__HAL_RCC_LPUART1_CLK_SLEEP_DISABLE();
-	
-	// CRITICAL: Disable GPIO clocks during sleep mode for maximum power saving
-	__HAL_RCC_GPIOA_CLK_SLEEP_DISABLE();
-	__HAL_RCC_GPIOB_CLK_SLEEP_DISABLE();
-	
-	// Disable other power-hungry peripherals during sleep
-	__HAL_RCC_DMA1_CLK_SLEEP_DISABLE();
-	__HAL_RCC_SYSCFG_CLK_SLEEP_DISABLE();
-	
-	// Enable Ultra Low Power mode (disables VREFINT during stop mode)
-	HAL_PWREx_EnableUltraLowPower();
-	// Enable fast wake-up to reduce VREFINT startup time
-	HAL_PWREx_EnableFastWakeUp();
-	
-	// CRITICAL: Disable debug interface in sleep mode to save power
-	__HAL_RCC_DBGMCU_CLK_SLEEP_DISABLE();
-	
 	// Configure all unused GPIO pins to analog mode for minimum power consumption
 	configure_gpio_for_low_power();
+	ConsolePrintf("GPIO configured for low power\r\n");
 	
+	// Properly deinitialize peripherals before sleep
 	HAL_I2C_DeInit(&hi2c1);
+	ConsolePrintf("I2C deinitialized\r\n");
 	HAL_UART_DeInit(&huart1);
+	ConsolePrintf("UART1 deinitialized\r\n");
 	HAL_UART_DeInit(&hlpuart1);
+	ConsolePrintf("LPUART1 deinitialized\r\n");
 	MX_ADC_DeInit();
-	__HAL_UART_DISABLE_IT(&hlpuart1, UART_IT_RXNE);
-	__HAL_UART_DISABLE_IT(&hlpuart1, UART_IT_IDLE);
-	__HAL_UART_CLEAR_FLAG(&hlpuart1, UART_FLAG_RXNE | UART_FLAG_IDLE);
-	__HAL_UART_DISABLE_IT(&huart1, UART_IT_RXNE);
-	__HAL_UART_DISABLE_IT(&huart1, UART_IT_IDLE);
-	__HAL_UART_CLEAR_FLAG(&huart1, UART_FLAG_RXNE | UART_FLAG_IDLE);
+	
+	// CRITICAL: Disable peripheral clocks completely before sleep
+	__HAL_RCC_I2C1_CLK_DISABLE();
+	__HAL_RCC_USART1_CLK_DISABLE();
+	__HAL_RCC_LPUART1_CLK_DISABLE();
+	__HAL_RCC_ADC1_CLK_DISABLE();
+	ConsolePrintf("All peripheral clocks disabled\r\n");
+	
+	// CRITICAL: Disable VREFINT and temperature sensor to save power
+	HAL_ADCEx_DisableVREFINT();
+	HAL_ADCEx_DisableVREFINTTempSensor();
+	ConsolePrintf("VREFINT and temp sensor disabled\r\n");
+	
+	// CRITICAL: Enable Ultra Low Power mode RIGHT BEFORE entering sleep
+	// This ensures it's not disabled by any peripheral deinitialization
+	HAL_PWREx_EnableUltraLowPower();
+	HAL_PWREx_EnableFastWakeUp();
+	ConsolePrintf("Ultra Low Power mode enabled\r\n");
 	
 	Enter_Stop_Mode();
 	
 	ConsolePrintf("Resumed after wake-up\r\n");
 	
-	// Re-enable peripheral clocks after wake-up
-	__HAL_RCC_ADC1_CLK_SLEEP_ENABLE();
-	__HAL_RCC_I2C1_CLK_SLEEP_ENABLE(); 
-	__HAL_RCC_USART1_CLK_SLEEP_ENABLE();
-	__HAL_RCC_LPUART1_CLK_SLEEP_ENABLE();
-	
-	// Re-enable GPIO clocks after wake-up
-	__HAL_RCC_GPIOA_CLK_SLEEP_ENABLE();
-	__HAL_RCC_GPIOB_CLK_SLEEP_ENABLE();
-	
-	// Re-enable other peripherals after wake-up
-	__HAL_RCC_DMA1_CLK_SLEEP_ENABLE();
-	__HAL_RCC_SYSCFG_CLK_SLEEP_ENABLE();
-	__HAL_RCC_DBGMCU_CLK_SLEEP_ENABLE();
-	
-	SystemClock_Config();
+	SystemClock_Config_Wrapper();
 	ConsolePrintf("System clock reconfigured\r\n");
+	
+	// CRITICAL: Re-enable Ultra Low Power mode IMMEDIATELY after system clock config
+	// because SystemClock_Config resets the power regulator settings
+	HAL_PWREx_EnableUltraLowPower();
+	HAL_PWREx_EnableFastWakeUp();
+	ConsolePrintf("Ultra Low Power mode re-enabled after system clock config\r\n");
+	
+	// Re-enable peripheral clocks before reinitializing peripherals
+	__HAL_RCC_I2C1_CLK_ENABLE();
+	__HAL_RCC_USART1_CLK_ENABLE();
+	__HAL_RCC_LPUART1_CLK_ENABLE();
+	__HAL_RCC_ADC1_CLK_ENABLE();
+	ConsolePrintf("Peripheral clocks re-enabled\r\n");
 	
 	// Restore GPIO configuration after sleep
 	restore_gpio_after_sleep();
 	
-	MX_I2C1_Init();
+	// CRITICAL: Re-configure unused pins for low power after GPIO restoration
+	// The GPIO init wrapper restores all pins, but we need unused ones back to analog
+	configure_gpio_for_low_power();
+	
+	MX_I2C1_Init_Wrapper();
 	ConsolePrintf("I2C1 reinitialized\r\n");
-	MX_USART1_UART_Init();
+	MX_USART1_UART_Init_Wrapper();
 	ConsolePrintf("UART reinitialized\r\n");
-	MX_LPUART1_UART_Init();
+	MX_LPUART1_UART_Init_Wrapper();
 	ConsolePrintf("LPUART1 (lora) reinitialized\r\n");
 	RTC_WakeUp_Init();
 	ConsolePrintf("RTC Wake-Up Timer reinitialized\r\n");
-	MX_ADC_Init();
+	
+	// CRITICAL: Re-enable Ultra Low Power mode after RTC init
+	// RTC initialization might affect power settings
+	HAL_PWREx_EnableUltraLowPower();
+	HAL_PWREx_EnableFastWakeUp();
+	ConsolePrintf("Ultra Low Power mode re-enabled after RTC init\r\n");
+	
+	MX_ADC_Init_Wrapper();
 	ConsolePrintf("ADC reinitialized\r\n");
+	
+	// CRITICAL: Re-disable VREFINT and temp sensor after ADC reinit
+	// ADC initialization re-enables these, causing high power consumption in subsequent sleeps
+	HAL_ADCEx_DisableVREFINT();
+	HAL_ADCEx_DisableVREFINTTempSensor();
+	ConsolePrintf("CRITICAL: VREFINT and temp sensor re-disabled after ADC init\r\n");
+	ConsolePrintf("Power management cycle complete - ready for next sleep\r\n");
 }
 
 void RTC_WakeUp_Init(void)
@@ -114,16 +128,27 @@ void RTC_WakeUp_Init(void)
 
 void MX_ADC_DeInit(void)
 {
-    /* 1) De‑initialize the ADC handle */
+    ConsolePrintf("Deinitializing ADC...\r\n");
+    
+    /* 1) Stop any ongoing ADC conversions */
+    if (HAL_ADC_Stop(&hadc) != HAL_OK) {
+        ConsolePrintf("ADC Stop failed\r\n");
+    }
+    
+    /* 2) De‑initialize the ADC handle */
     if (HAL_ADC_DeInit(&hadc) != HAL_OK) {
+        ConsolePrintf("ADC DeInit failed\r\n");
         Error_Handler();
     }
-    /* 2) Disable the ADC clock */
+    
+    /* 3) Disable the ADC clock */
     __HAL_RCC_ADC1_CLK_DISABLE();
+    ConsolePrintf("ADC clock disabled\r\n");
 
-    /* 3) Reset the GPIO pin back to its default state
-       (PB1 was configured as analog in MX_GPIO_Init) */
+    /* 4) Reset the GPIO pin back to its default state (analog mode) */
     HAL_GPIO_DeInit(GPIOB, GPIO_PIN_1);
+    
+    ConsolePrintf("ADC deinitialization complete\r\n");
 }
 
 void Enter_Stop_Mode(void)
@@ -133,7 +158,7 @@ void Enter_Stop_Mode(void)
   // Clear Wake-Up flag
   __HAL_RTC_WAKEUPTIMER_CLEAR_FLAG(&hrtc, RTC_FLAG_WUTF);
   ConsolePrintf("RTC Wake-Up flag cleared\r\n");
-
+  
   // Enter Stop mode (low-power mode)
   ConsolePrintf("Entering Stop mode\r\n");
   /* Suspend SysTick to prevent it from waking up the MCU immediately */
@@ -141,18 +166,14 @@ void Enter_Stop_Mode(void)
   HAL_PWR_EnterSTOPMode(PWR_LOWPOWERREGULATOR_ON, PWR_STOPENTRY_WFI);
   /* Resume SysTick after waking up */
   HAL_ResumeTick();
+  
   ConsolePrintf("Exited Stop mode\r\n");
-}
-
-void RTC_IRQHandler(void)
-{
-  HAL_RTCEx_WakeUpTimerIRQHandler(&hrtc);
 }
 
 void HAL_RTCEx_WakeUpTimerEventCallback(RTC_HandleTypeDef *hrtc)
 {
-  // Reconfigure system clock after wake-up
-  SystemClock_Config();
+  // System clock will be reconfigured in the main wake-up sequence
+  // No need to do it here to avoid conflicts
 }
 
 void configure_gpio_for_low_power(void)
@@ -182,5 +203,5 @@ void restore_gpio_after_sleep(void)
     // Re-initialize GPIO pins that need to be restored after sleep
     // This should restore only the pins that are actually used
     // Most pins can remain in analog mode
-    MX_GPIO_Init(); // This will restore the necessary GPIO configurations
+    MX_GPIO_Init_Wrapper(); // This will restore the necessary GPIO configurations
 }
