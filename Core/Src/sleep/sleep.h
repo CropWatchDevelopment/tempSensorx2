@@ -12,5 +12,7 @@ void enter_sleep_mode();
 void Enter_Stop_Mode();
 void RTC_WakeUp_Init(void);
 void MX_ADC_DeInit(void);
+void configure_gpio_for_low_power(void);
+void restore_gpio_after_sleep(void);
 
 #endif /* SRC_SLEEP_SLEEP_H_ */

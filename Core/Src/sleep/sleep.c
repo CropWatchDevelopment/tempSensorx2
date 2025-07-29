@@ -6,11 +6,38 @@
  */
 #include "main.h"
 #include "stm32l0xx_hal.h"
+#include "stm32l0xx_hal_rcc.h"
 #include "sleep.h"
 
 void enter_sleep_mode()
 {
 	ConsolePrintf("Going to sleep...\r\n");
+	
+	// Disable peripheral clocks during sleep mode for maximum power saving
+	__HAL_RCC_ADC1_CLK_SLEEP_DISABLE();
+	__HAL_RCC_I2C1_CLK_SLEEP_DISABLE(); 
+	__HAL_RCC_USART1_CLK_SLEEP_DISABLE();
+	__HAL_RCC_LPUART1_CLK_SLEEP_DISABLE();
+	
+	// CRITICAL: Disable GPIO clocks during sleep mode for maximum power saving
+	__HAL_RCC_GPIOA_CLK_SLEEP_DISABLE();
+	__HAL_RCC_GPIOB_CLK_SLEEP_DISABLE();
+	
+	// Disable other power-hungry peripherals during sleep
+	__HAL_RCC_DMA1_CLK_SLEEP_DISABLE();
+	__HAL_RCC_SYSCFG_CLK_SLEEP_DISABLE();
+	
+	// Enable Ultra Low Power mode (disables VREFINT during stop mode)
+	HAL_PWREx_EnableUltraLowPower();
+	// Enable fast wake-up to reduce VREFINT startup time
+	HAL_PWREx_EnableFastWakeUp();
+	
+	// CRITICAL: Disable debug interface in sleep mode to save power
+	__HAL_RCC_DBGMCU_CLK_SLEEP_DISABLE();
+	
+	// Configure all unused GPIO pins to analog mode for minimum power consumption
+	configure_gpio_for_low_power();
+	
 	HAL_I2C_DeInit(&hi2c1);
 	HAL_UART_DeInit(&huart1);
 	HAL_UART_DeInit(&hlpuart1);
@@ -21,10 +48,32 @@ void enter_sleep_mode()
 	__HAL_UART_DISABLE_IT(&huart1, UART_IT_RXNE);
 	__HAL_UART_DISABLE_IT(&huart1, UART_IT_IDLE);
 	__HAL_UART_CLEAR_FLAG(&huart1, UART_FLAG_RXNE | UART_FLAG_IDLE);
+	
 	Enter_Stop_Mode();
+	
 	ConsolePrintf("Resumed after wake-up\r\n");
+	
+	// Re-enable peripheral clocks after wake-up
+	__HAL_RCC_ADC1_CLK_SLEEP_ENABLE();
+	__HAL_RCC_I2C1_CLK_SLEEP_ENABLE(); 
+	__HAL_RCC_USART1_CLK_SLEEP_ENABLE();
+	__HAL_RCC_LPUART1_CLK_SLEEP_ENABLE();
+	
+	// Re-enable GPIO clocks after wake-up
+	__HAL_RCC_GPIOA_CLK_SLEEP_ENABLE();
+	__HAL_RCC_GPIOB_CLK_SLEEP_ENABLE();
+	
+	// Re-enable other peripherals after wake-up
+	__HAL_RCC_DMA1_CLK_SLEEP_ENABLE();
+	__HAL_RCC_SYSCFG_CLK_SLEEP_ENABLE();
+	__HAL_RCC_DBGMCU_CLK_SLEEP_ENABLE();
+	
 	SystemClock_Config();
 	ConsolePrintf("System clock reconfigured\r\n");
+	
+	// Restore GPIO configuration after sleep
+	restore_gpio_after_sleep();
+	
 	MX_I2C1_Init();
 	ConsolePrintf("I2C1 reinitialized\r\n");
 	MX_USART1_UART_Init();
@@ -104,4 +153,34 @@ void HAL_RTCEx_WakeUpTimerEventCallback(RTC_HandleTypeDef *hrtc)
 {
   // Reconfigure system clock after wake-up
   SystemClock_Config();
+}
+
+void configure_gpio_for_low_power(void)
+{
+    GPIO_InitTypeDef GPIO_InitStruct = {0};
+    
+    // Configure all unused GPIO pins to analog mode to minimize leakage current
+    // This is CRITICAL for achieving lowest power consumption
+    
+    // GPIOA: Set unused pins to analog mode (except PA0 - VBAT_MEAS, PA2/PA3 - USART1, PA9/PA10 if used)
+    GPIO_InitStruct.Pin = GPIO_PIN_1 | GPIO_PIN_4 | GPIO_PIN_5 | GPIO_PIN_6 | GPIO_PIN_7 | 
+                          GPIO_PIN_8 | GPIO_PIN_11 | GPIO_PIN_12 | GPIO_PIN_15;
+    GPIO_InitStruct.Mode = GPIO_MODE_ANALOG;
+    GPIO_InitStruct.Pull = GPIO_NOPULL;
+    HAL_GPIO_Init(GPIOA, &GPIO_InitStruct);
+    
+    // GPIOB: Set unused pins to analog mode (except PB0 - VBAT_MEAS_EN, PB1 - ADC, PB5 - I2C_ENABLE, PB6/PB7 - I2C1, PB10/PB11 - LPUART1)
+    GPIO_InitStruct.Pin = GPIO_PIN_2 | GPIO_PIN_3 | GPIO_PIN_4 | GPIO_PIN_8 | 
+                          GPIO_PIN_9 | GPIO_PIN_12 | GPIO_PIN_13 | GPIO_PIN_14 | GPIO_PIN_15;
+    GPIO_InitStruct.Mode = GPIO_MODE_ANALOG;
+    GPIO_InitStruct.Pull = GPIO_NOPULL;
+    HAL_GPIO_Init(GPIOB, &GPIO_InitStruct);
+}
+
+void restore_gpio_after_sleep(void)
+{
+    // Re-initialize GPIO pins that need to be restored after sleep
+    // This should restore only the pins that are actually used
+    // Most pins can remain in analog mode
+    MX_GPIO_Init(); // This will restore the necessary GPIO configurations
 }

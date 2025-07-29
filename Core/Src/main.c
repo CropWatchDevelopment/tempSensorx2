@@ -58,10 +58,6 @@
 #define SHT40_MEASURE_HIGH_PRECISION 0xFD // High-precision measurement command
 #define TIMEOUT 100                       // I2C timeout in ms
 
-// Read Battery Voltage
-#define VREFINT_CAL_ADDR   ((uint16_t*)0x1FF80078U)
-#define ADC_MAX            4095U       // 12‑bit full scale
-
 
 /* USER CODE END PD */
 
@@ -82,11 +78,12 @@ RTC_HandleTypeDef hrtc;
 
 /* USER CODE BEGIN PV */
 static ATC_HandleTypeDef lora;
+int16_t UPLINK_COUNT = 0;
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
 void SystemClock_Config(void);
-static void MX_GPIO_Init(void);
+void MX_GPIO_Init(void);
 void MX_I2C1_Init(void);
 void MX_USART1_UART_Init(void);
 static void MX_RTC_Init(void);
@@ -140,20 +137,19 @@ int main(void)
   LoRaWAN_Join(&lora);
   LoRaWAN_UpdateBattery(&lora);
 
-  uint32_t batt_voltage = 0;
-  uint8_t batt_percentage = 0;
-  if (GetBatteryLevel(&batt_voltage, &batt_percentage) == BATTERY_OK) {
-	ConsolePrintf("Battery: %lu mV (%d%%)\r\n", batt_voltage, batt_percentage);
-  } else {
-	ConsolePrintf("Battery measurement failed\r\n");
-  }
-
   while (1)
   {
 	  enter_sleep_mode();
 	  LoRaWAN_Error_t isConnected = LoRaWAN_Join_Status(&lora);
 	        if (isConnected == LORAWAN_ERROR_OK)
 	        {
+	        	UPLINK_COUNT++;
+	        	if (UPLINK_COUNT > 4464)
+	        	{
+	        		UPLINK_COUNT = 0;
+	        		LoRaWAN_UpdateBattery(&lora);
+	        	}
+
 	            I2C_Error_t i2c_result = sensor_init_and_read();
 	            uint8_t payload[3];
 	            if (i2c_result == I2C_ERROR_OK)
@@ -166,9 +162,8 @@ int main(void)
 	            else if (i2c_result == I2C_ERROR_SENSORS_TOO_DIFFERENT)
 	            {
 	          	  uint8_t payload[3];
-	          	  payload[0] = 255;
-	  		   	  payload[1] = 255;
-	  			  payload[2] = 255;
+	          	  payload[0] = (uint8_t)(temp_delta >> 8);
+	          	  payload[1] = (uint8_t)(temp_delta & 0xFF);
 	          	  LoRaWAN_SendHexOnPort(&lora, 6, payload, sizeof(payload));
 	            }
 	            else
@@ -448,7 +443,7 @@ static void MX_RTC_Init(void)
   * @param None
   * @retval None
   */
-static void MX_GPIO_Init(void)
+void MX_GPIO_Init(void)
 {
   GPIO_InitTypeDef GPIO_InitStruct = {0};
   /* USER CODE BEGIN MX_GPIO_Init_1 */
@@ -460,7 +455,7 @@ static void MX_GPIO_Init(void)
   __HAL_RCC_GPIOB_CLK_ENABLE();
 
   /*Configure GPIO pin Output Level */
-  HAL_GPIO_WritePin(VBAT_MEAS_EN_GPIO_Port, VBAT_MEAS_EN_Pin, GPIO_PIN_SET);
+  HAL_GPIO_WritePin(VBAT_MEAS_EN_GPIO_Port, VBAT_MEAS_EN_Pin, GPIO_PIN_RESET);
 
   /*Configure GPIO pin Output Level */
   HAL_GPIO_WritePin(I2C_ENABLE_GPIO_Port, I2C_ENABLE_Pin, GPIO_PIN_RESET);
@@ -512,6 +507,21 @@ void ConsolePrintf(const char *format, ...)
 
   // Transmit the combined message
   HAL_UART_Transmit(&huart1, (uint8_t *)final_buffer, strlen(final_buffer), HAL_MAX_DELAY);
+}
+// Add this function to your main.c for even more power savings
+void configure_system_for_ultra_low_power(void)
+{
+    // Disable all unnecessary peripheral clocks
+    __HAL_RCC_CRC_CLK_DISABLE();
+    
+    // Configure unused pins as analog inputs
+    configure_gpio_for_low_power();
+    
+    // Disable VREFINT when not needed (already done with ULP mode)
+    // This is handled by HAL_PWREx_EnableUltraLowPower()
+    
+    // Consider using HSI16 instead of MSI if applicable for your timing requirements
+    // MSI can be more power efficient at very low speeds
 }
 /* USER CODE END 4 */
 
