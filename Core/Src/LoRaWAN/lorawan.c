@@ -3,6 +3,7 @@
 #include <string.h>
 #include <stdio.h>
 #include <stdbool.h>
+#include "../battery/battery.h"
 
 extern void ConsolePrintf(const char *format, ...);
 
@@ -221,29 +222,6 @@ LoRaWAN_Error_t LoRaWAN_Join_Status(ATC_HandleTypeDef *lora) {
     return LORAWAN_ERROR_NOT_JOINED;
 }
 
-LoRaWAN_Error_t LoRaWAN_Set_Battery(
-    ATC_HandleTypeDef *lora,
-    int level
-) {
-    if (!lora || !lora->huart || level < 0 || level > 100) {
-        return LORAWAN_ERROR_INVALID_PARAM;
-    }
-    char cmd[16];
-    int len = snprintf(cmd, sizeof(cmd), "AT+BAT=%d\r\n", level);
-    if (len < 0 || len >= (int)sizeof(cmd)) {
-        return LORAWAN_ERROR_INVALID_PARAM;
-    }
-    char response[64] = {0};
-    return send_data_and_get_response(
-        lora,
-        cmd,
-        response,
-        sizeof(response),
-        5000,
-        "OK"
-    );
-}
-
 LoRaWAN_Error_t LoRaWAN_SetPort(ATC_HandleTypeDef *lora, uint8_t port) {
     if (!lora || !lora->huart || port < 1 || port > 198) {
         return LORAWAN_ERROR_INVALID_PARAM;
@@ -281,4 +259,51 @@ LoRaWAN_Error_t LoRaWAN_SendHexOnPort(
     }
     // 2) send exactly as before
     return LoRaWAN_SendHex(lora, payload, length);
+}
+
+LoRaWAN_Error_t LoRaWAN_Set_Battery(
+    ATC_HandleTypeDef *lora,
+    uint8_t batteryStatus  // 0..254 per spec
+) {
+    if (!lora || !lora->huart || batteryStatus > 254U) {
+        return LORAWAN_ERROR_INVALID_PARAM;
+    }
+    char cmd[16];
+    int len = snprintf(cmd, sizeof(cmd), "AT+BAT %u\r\n", (unsigned)batteryStatus);
+    if (len < 0 || len >= (int)sizeof(cmd)) {
+        return LORAWAN_ERROR_INVALID_PARAM;
+    }
+    char resp[64] = {0};
+    return send_data_and_get_response(
+        lora,
+        cmd,
+        resp,
+        sizeof(resp),
+        5000,
+        "OK"
+    );
+}
+
+LoRaWAN_Error_t LoRaWAN_UpdateBattery(ATC_HandleTypeDef *lora) {
+    uint32_t v_mV;
+    uint8_t  pct;
+    Battery_Status_t bst = GetBatteryLevel(&v_mV, &pct);
+    if (bst != BATTERY_OK) {
+        return LORAWAN_ERROR_COMMUNICATION;
+    }
+
+    // map pct(0..100) → batteryStatus(1..254):
+    //   0%   → 1
+    //   100% → 254
+    //   linearly in between
+    uint8_t batteryStatus;
+    if (pct == 0) {
+        batteryStatus = 1;
+    } else if (pct >= 100) {
+        batteryStatus = 254;
+    } else {
+        batteryStatus = (uint8_t)(((uint32_t)pct * 253U + 50U) / 100U + 1U);
+    }
+
+    return LoRaWAN_Set_Battery(lora, batteryStatus);
 }

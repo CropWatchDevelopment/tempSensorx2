@@ -16,6 +16,8 @@ uint16_t temp_ticks_2 = 0;
 uint16_t hum_ticks_2 = 0;
 uint16_t calculated_temp;
 uint8_t  calculated_hum;
+uint8_t temp_delta;
+uint8_t hum_delta;
 int16_t i2c_error_code = 0;
 
 void scan_i2c_bus(void)
@@ -31,6 +33,7 @@ void scan_i2c_bus(void)
 I2C_Error_t sensor_init_and_read(void)
 {
 	HAL_GPIO_WritePin(I2C_ENABLE_GPIO_Port, I2C_ENABLE_Pin, GPIO_PIN_SET);
+	HAL_Delay(320); // WE NEED THIS FOR IC POWER UP!!! IT TAKES 300mS to competely power up!!!
 	scan_i2c_bus();
     if (!has_sensor_1 && !has_sensor_2) {
     	i2c_error_code = NO_SENSORS_FOUND;
@@ -64,11 +67,10 @@ I2C_Error_t sensor_init_and_read(void)
              calculated_hum    = (uint8_t)(hum_ticks_1 / 1000U);
     uint8_t  calculated_hum_2  = (uint8_t)(hum_ticks_2 / 1000U);
 
-    // Determine diffs between temps and hums
-    uint8_t temp_delta = (uint8_t)abs(calculated_temp - calculated_temp_2);
-//    uint8_t hum_delta  = (uint8_t)abs(calculated_hum  - calculated_hum_2);
+             temp_delta        = (uint8_t)abs(calculated_temp - calculated_temp_2);
+             hum_delta         = (uint8_t)abs(calculated_hum  - calculated_hum_2);
 
-    if (temp_delta > 2) return I2C_ERROR_SENSORS_TOO_DIFFERENT;
+    if (temp_delta > 120) return I2C_ERROR_SENSORS_TOO_DIFFERENT;
     if (i2c_error_code) return false;
 
     return I2C_ERROR_OK;

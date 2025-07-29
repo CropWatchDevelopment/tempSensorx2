@@ -31,9 +31,11 @@ LoRaWAN_Error_t LoRaWAN_SetPort(ATC_HandleTypeDef *lora, uint8_t port);
 LoRaWAN_Error_t LoRaWAN_SendHex(ATC_HandleTypeDef *lora, const uint8_t *payload, size_t length);
 LoRaWAN_Error_t LoRaWAN_SendHexOnPort(ATC_HandleTypeDef *lora, uint8_t port, const uint8_t *payload, size_t length);
 
+LoRaWAN_Error_t LoRaWAN_Set_Battery(ATC_HandleTypeDef *lora, uint8_t batteryStatus);
+LoRaWAN_Error_t LoRaWAN_UpdateBattery(ATC_HandleTypeDef *lora);
+
 
 // Setup commands
-LoRaWAN_Error_t LoRaWAN_Set_Battery(ATC_HandleTypeDef *lora, int battery);
 LoRaWAN_Error_t LoRaWAN_Set_Battery_Status(ATC_HandleTypeDef *lora, uint8_t battery_percentage, int measurement_success);
 
 #endif // LORAWAN_H

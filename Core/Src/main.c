@@ -138,50 +138,53 @@ int main(void)
   MX_ADC_Init();
   RTC_WakeUp_Init();
   LoRaWAN_Join(&lora);
+  LoRaWAN_UpdateBattery(&lora);
+
+  uint32_t batt_voltage = 0;
+  uint8_t batt_percentage = 0;
+  if (GetBatteryLevel(&batt_voltage, &batt_percentage) == BATTERY_OK) {
+	ConsolePrintf("Battery: %lu mV (%d%%)\r\n", batt_voltage, batt_percentage);
+  } else {
+	ConsolePrintf("Battery measurement failed\r\n");
+  }
 
   while (1)
   {
 	  enter_sleep_mode();
-
-      LoRaWAN_Error_t isConnected = LoRaWAN_Join_Status(&lora);
-      if (isConnected == LORAWAN_ERROR_OK)
-      {
-          uint32_t batt_voltage = 0;
-          uint8_t batt_percentage = 0;
-          if (GetBatteryLevel(&batt_voltage, &batt_percentage) == BATTERY_OK) {
-              ConsolePrintf("Battery: %lu mV (%d%%)\r\n", batt_voltage, batt_percentage);
-          } else {
-              ConsolePrintf("Battery measurement failed\r\n");
-          }
-          HAL_GPIO_WritePin(I2C_ENABLE_GPIO_Port, I2C_ENABLE_Pin, GPIO_PIN_SET);
-          HAL_Delay(300);
-          scan_i2c_bus();
-          I2C_Error_t i2c_success = sensor_init_and_read();
-          HAL_GPIO_WritePin(I2C_ENABLE_GPIO_Port, I2C_ENABLE_Pin, GPIO_PIN_RESET);
-          if (I2C_ERROR_OK)
-          {
-              uint8_t payload[3];
-              payload[0] = (uint8_t)(calculated_temp >> 8);
-              payload[1] = (uint8_t)(calculated_temp & 0xFF);
-              payload[2] = calculated_hum;
-//              LoRaWAN_SendHex(&lora, payload, 3);
-              LoRaWAN_SendHexOnPort(&lora, 1, payload, sizeof(payload));
-          }
-          else
-          {
-              uint8_t payload[3];
-              payload[0] = 255;
-              payload[1] = 255;
-              payload[2] = 255;
-//              LoRaWAN_SendHex(&lora, payload, 3);
-              LoRaWAN_SendHexOnPort(&lora, 6, payload, sizeof(payload));
-          }
-      }
-      else
-      {
-          ConsolePrintf("I am not joined, trying to join again...\r\n");
-          LoRaWAN_Join(&lora);
-      }
+	  LoRaWAN_Error_t isConnected = LoRaWAN_Join_Status(&lora);
+	        if (isConnected == LORAWAN_ERROR_OK)
+	        {
+	            I2C_Error_t i2c_result = sensor_init_and_read();
+	            uint8_t payload[3];
+	            if (i2c_result == I2C_ERROR_OK)
+	            {
+	                payload[0] = (uint8_t)(calculated_temp >> 8);
+	                payload[1] = (uint8_t)(calculated_temp & 0xFF);
+	                payload[2] = calculated_hum;
+	                LoRaWAN_SendHexOnPort(&lora, 1, payload, sizeof(payload));
+	            }
+	            else if (i2c_result == I2C_ERROR_SENSORS_TOO_DIFFERENT)
+	            {
+	          	  uint8_t payload[3];
+	          	  payload[0] = 255;
+	  		   	  payload[1] = 255;
+	  			  payload[2] = 255;
+	          	  LoRaWAN_SendHexOnPort(&lora, 6, payload, sizeof(payload));
+	            }
+	            else
+	            {
+	                uint8_t payload[3];
+	                payload[0] = 255;
+	                payload[1] = 255;
+	                payload[2] = 255;
+	                LoRaWAN_SendHexOnPort(&lora, 6, payload, sizeof(payload));
+	            }
+	        }
+	        else
+	        {
+	            ConsolePrintf("I am not joined, trying to join again...\r\n");
+	            LoRaWAN_Join(&lora);
+	        }
   }
   /* USER CODE END 3 */
 }
