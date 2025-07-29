@@ -30,6 +30,7 @@
 #include "battery/battery.h"
 #include "utils/sensor_payload.h"
 #include "stm32l0xx_hal.h"
+#include "sleep/sleep.h"
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -81,96 +82,23 @@ RTC_HandleTypeDef hrtc;
 
 /* USER CODE BEGIN PV */
 static ATC_HandleTypeDef lora;
-static int send_count = 0;
-static uint32_t battery_value_adc;
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
 void SystemClock_Config(void);
 static void MX_GPIO_Init(void);
-static void MX_I2C1_Init(void);
-static void MX_USART1_UART_Init(void);
+void MX_I2C1_Init(void);
+void MX_USART1_UART_Init(void);
 static void MX_RTC_Init(void);
-static void MX_LPUART1_UART_Init(void);
-static void MX_ADC_Init(void);
-static void MX_ADC_DeInit(void);
+void MX_LPUART1_UART_Init(void);
+void MX_ADC_Init(void);
+void MX_ADC_DeInit(void);
 /* USER CODE BEGIN PFP */
 void ConsolePrintf(const char *format, ...);
 /* USER CODE END PFP */
 
 /* Private user code ---------------------------------------------------------*/
 /* USER CODE BEGIN 0 */
-void RTC_IRQHandler(void)
-{
-  HAL_RTCEx_WakeUpTimerIRQHandler(&hrtc);
-}
-
-void RTC_WakeUp_Init(void)
-{
-  ConsolePrintf("Starting RTC Wake-Up Timer configuration\r\n");
-
-  // Disable the Wake-Up Timer before configuring
-  HAL_RTCEx_DeactivateWakeUpTimer(&hrtc);
-  ConsolePrintf("RTC Wake-Up Timer disabled\r\n");
-
-  // Configure Wake-Up Timer for 60 seconds using LSI (~40 kHz)
-  // With AsynchPrediv = 127, SynchPrediv = 255: CK_SPRE = 40,000 / (128 * 256) = ~1.22 Hz
-  // For ~60 seconds: WakeUpCounter = (60 * 1.22) - 1 = ~72
-  if (HAL_RTCEx_SetWakeUpTimer_IT(&hrtc, 59, RTC_WAKEUPCLOCK_CK_SPRE_16BITS) != HAL_OK)
-  {
-    ConsolePrintf("RTC Wake-Up Timer Init Failed\r\n");
-  }
-  else
-  {
-    ConsolePrintf("RTC Wake-Up Timer Initialized for ~60 seconds\r\n");
-  }
-
-  // Enable RTC Wake-Up interrupt in NVIC
-  HAL_NVIC_SetPriority(RTC_IRQn, 0, 0);
-  HAL_NVIC_EnableIRQ(RTC_IRQn);
-  ConsolePrintf("RTC Wake-Up interrupt enabled in NVIC\r\n");
-}
-
-void HAL_RTCEx_WakeUpTimerEventCallback(RTC_HandleTypeDef *hrtc)
-{
-  // Reconfigure system clock after wake-up
-  SystemClock_Config();
-
-  // Print message
-  ConsolePrintf("Woke up at %s\r\n", "1-minute interval");
-}
-
-void Enter_Stop_Mode(void)
-{
-  ConsolePrintf("Preparing to enter Stop mode\r\n");
-
-  // Clear Wake-Up flag
-  __HAL_RTC_WAKEUPTIMER_CLEAR_FLAG(&hrtc, RTC_FLAG_WUTF);
-  ConsolePrintf("RTC Wake-Up flag cleared\r\n");
-
-  // Enter Stop mode (low-power mode)
-  ConsolePrintf("Entering Stop mode\r\n");
-  /* Suspend SysTick to prevent it from waking up the MCU immediately */
-  HAL_SuspendTick();
-  HAL_PWR_EnterSTOPMode(PWR_LOWPOWERREGULATOR_ON, PWR_STOPENTRY_WFI);
-  /* Resume SysTick after waking up */
-  HAL_ResumeTick();
-  ConsolePrintf("Exited Stop mode\r\n");
-}
-
-void MX_ADC_DeInit(void)
-{
-    /* 1) De‑initialize the ADC handle */
-    if (HAL_ADC_DeInit(&hadc) != HAL_OK) {
-        Error_Handler();
-    }
-    /* 2) Disable the ADC clock */
-    __HAL_RCC_ADC1_CLK_DISABLE();
-
-    /* 3) Reset the GPIO pin back to its default state
-       (PB1 was configured as analog in MX_GPIO_Init) */
-    HAL_GPIO_DeInit(GPIOB, GPIO_PIN_1);
-}
 
 /* USER CODE END 0 */
 
@@ -191,7 +119,7 @@ int main(void)
   HAL_Init();
 
   /* USER CODE BEGIN Init */
-  HAL_Delay(10000);
+  HAL_Delay(6000);
   /* USER CODE END Init */
 
   /* Configure the system clock */
@@ -209,41 +137,12 @@ int main(void)
   MX_LPUART1_UART_Init();
   MX_ADC_Init();
   RTC_WakeUp_Init();
-
-  uint32_t batt_voltage = 0;
-  uint8_t batt_percentage = 0;
-  if (GetBatteryLevel(&batt_voltage, &batt_percentage) == BATTERY_OK) {
-      ConsolePrintf("Initial Battery: %lu mV (%d%%)\r\n", batt_voltage, batt_percentage);
-  }
   LoRaWAN_Join(&lora);
-  ConsolePrintf("Entering main loop\r\n");
+
   while (1)
   {
-      ConsolePrintf("Going to sleep...\r\n");
-      HAL_I2C_DeInit(&hi2c1);
-      HAL_UART_DeInit(&huart1);
-      HAL_UART_DeInit(&hlpuart1);
-      MX_ADC_DeInit();
-      __HAL_UART_DISABLE_IT(&hlpuart1, UART_IT_RXNE);
-      __HAL_UART_DISABLE_IT(&hlpuart1, UART_IT_IDLE);
-      __HAL_UART_CLEAR_FLAG(&hlpuart1, UART_FLAG_RXNE | UART_FLAG_IDLE);
-      __HAL_UART_DISABLE_IT(&huart1, UART_IT_RXNE);
-      __HAL_UART_DISABLE_IT(&huart1, UART_IT_IDLE);
-      __HAL_UART_CLEAR_FLAG(&huart1, UART_FLAG_RXNE | UART_FLAG_IDLE);
-      Enter_Stop_Mode();
-      ConsolePrintf("Resumed after wake-up\r\n");
-      SystemClock_Config();
-      ConsolePrintf("System clock reconfigured\r\n");
-      MX_I2C1_Init();
-      ConsolePrintf("I2C1 reinitialized\r\n");
-      MX_USART1_UART_Init();
-      ConsolePrintf("UART reinitialized\r\n");
-      MX_LPUART1_UART_Init();
-      ConsolePrintf("LPUART1 (lora) reinitialized\r\n");
-      RTC_WakeUp_Init();
-      ConsolePrintf("RTC Wake-Up Timer reinitialized\r\n");
-      MX_ADC_Init();
-      ConsolePrintf("ADC reinitialized\r\n");
+	  enter_sleep_mode();
+
       LoRaWAN_Error_t isConnected = LoRaWAN_Join_Status(&lora);
       if (isConnected == LORAWAN_ERROR_OK)
       {
@@ -257,24 +156,25 @@ int main(void)
           HAL_GPIO_WritePin(I2C_ENABLE_GPIO_Port, I2C_ENABLE_Pin, GPIO_PIN_SET);
           HAL_Delay(300);
           scan_i2c_bus();
-          bool i2c_success = sensor_init_and_read();
+          I2C_Error_t i2c_success = sensor_init_and_read();
           HAL_GPIO_WritePin(I2C_ENABLE_GPIO_Port, I2C_ENABLE_Pin, GPIO_PIN_RESET);
-          if (i2c_success)
+          if (I2C_ERROR_OK)
           {
-              uint8_t payload[5];
+              uint8_t payload[3];
               payload[0] = (uint8_t)(calculated_temp >> 8);
               payload[1] = (uint8_t)(calculated_temp & 0xFF);
               payload[2] = calculated_hum;
-              payload[3] = (uint8_t)(batt_voltage >> 8);
-              payload[4] = batt_percentage;
-              LoRaWAN_SendHex(&lora, payload, 5);
+//              LoRaWAN_SendHex(&lora, payload, 3);
+              LoRaWAN_SendHexOnPort(&lora, 1, payload, sizeof(payload));
           }
           else
           {
-              uint8_t payload[2];
-              payload[0] = (uint8_t)(batt_voltage >> 8);
-              payload[1] = batt_percentage;
-              LoRaWAN_SendHex(&lora, payload, 2);
+              uint8_t payload[3];
+              payload[0] = 255;
+              payload[1] = 255;
+              payload[2] = 255;
+//              LoRaWAN_SendHex(&lora, payload, 3);
+              LoRaWAN_SendHexOnPort(&lora, 6, payload, sizeof(payload));
           }
       }
       else
@@ -344,14 +244,12 @@ void SystemClock_Config(void)
   * @param None
   * @retval None
   */
-static void MX_ADC_Init(void)
+void MX_ADC_Init(void)
 {
 
   /* USER CODE BEGIN ADC_Init 0 */
 
   /* USER CODE END ADC_Init 0 */
-
-  ADC_ChannelConfTypeDef sConfig = {0};
 
   /* USER CODE BEGIN ADC_Init 1 */
 
@@ -394,7 +292,7 @@ static void MX_ADC_Init(void)
   * @param None
   * @retval None
   */
-static void MX_I2C1_Init(void)
+void MX_I2C1_Init(void)
 {
 
   /* USER CODE BEGIN I2C1_Init 0 */
@@ -442,7 +340,7 @@ static void MX_I2C1_Init(void)
   * @param None
   * @retval None
   */
-static void MX_LPUART1_UART_Init(void)
+void MX_LPUART1_UART_Init(void)
 {
 
   /* USER CODE BEGIN LPUART1_Init 0 */
@@ -476,7 +374,7 @@ static void MX_LPUART1_UART_Init(void)
   * @param None
   * @retval None
   */
-static void MX_USART1_UART_Init(void)
+void MX_USART1_UART_Init(void)
 {
 
   /* USER CODE BEGIN USART1_Init 0 */

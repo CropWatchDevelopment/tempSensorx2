@@ -12,6 +12,7 @@ RM := rm -rf
 -include Drivers/STM32L0xx_HAL_Driver/Src/subdir.mk
 -include Core/Startup/subdir.mk
 -include Core/Src/utils/subdir.mk
+-include Core/Src/sleep/subdir.mk
 -include Core/Src/sensirion/subdir.mk
 -include Core/Src/battery/subdir.mk
 -include Core/Src/LoRaWAN/subdir.mk

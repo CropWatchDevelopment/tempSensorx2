@@ -5,6 +5,8 @@
 #include <stdint.h>
 #include <stddef.h>
 
+#define APPLICATION_PORT_PARAM 629
+
 typedef enum {
     LORAWAN_ERROR_OK = 0,
     LORAWAN_ERROR_INVALID_PARAM = -1,
@@ -25,7 +27,10 @@ typedef struct {
 LoRaWAN_Error_t send_data_and_get_response(ATC_HandleTypeDef *lora, const char *data, char *response, uint32_t response_size, uint32_t timeout_ms, const char *expected_response);
 LoRaWAN_Error_t LoRaWAN_Join(ATC_HandleTypeDef *lora);
 LoRaWAN_Error_t LoRaWAN_Join_Status(ATC_HandleTypeDef *lora);
+LoRaWAN_Error_t LoRaWAN_SetPort(ATC_HandleTypeDef *lora, uint8_t port);
 LoRaWAN_Error_t LoRaWAN_SendHex(ATC_HandleTypeDef *lora, const uint8_t *payload, size_t length);
+LoRaWAN_Error_t LoRaWAN_SendHexOnPort(ATC_HandleTypeDef *lora, uint8_t port, const uint8_t *payload, size_t length);
+
 
 // Setup commands
 LoRaWAN_Error_t LoRaWAN_Set_Battery(ATC_HandleTypeDef *lora, int battery);

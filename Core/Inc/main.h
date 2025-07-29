@@ -53,6 +53,20 @@ extern "C" {
 void Error_Handler(void);
 
 /* USER CODE BEGIN EFP */
+// External variable declarations
+extern ADC_HandleTypeDef hadc;
+extern I2C_HandleTypeDef hi2c1;
+extern UART_HandleTypeDef hlpuart1;
+extern UART_HandleTypeDef huart1;
+extern RTC_HandleTypeDef hrtc;
+
+// Function declarations
+void SystemClock_Config(void);
+void MX_I2C1_Init(void);
+void MX_USART1_UART_Init(void);
+void MX_LPUART1_UART_Init(void);
+void MX_ADC_Init(void);
+void ConsolePrintf(const char *format, ...);
 
 /* USER CODE END EFP */
 

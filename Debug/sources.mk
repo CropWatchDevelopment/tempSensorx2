@@ -26,6 +26,7 @@ Core/Src/LoRaWAN \
 Core/Src/battery \
 Core/Src \
 Core/Src/sensirion \
+Core/Src/sleep \
 Core/Src/utils \
 Core/Startup \
 Drivers/STM32L0xx_HAL_Driver/Src \

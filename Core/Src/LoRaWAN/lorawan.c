@@ -190,19 +190,35 @@ LoRaWAN_Error_t LoRaWAN_SendHex(
     );
 }
 
+
 LoRaWAN_Error_t LoRaWAN_Join_Status(ATC_HandleTypeDef *lora) {
     char resp[32] = {0};
+
+    // Read the full response (don’t stop on any particular substring)
     LoRaWAN_Error_t st = send_data_and_get_response(
         lora,
         "ATI 3001\r\n",
         resp,
         sizeof(resp),
         300,
-        "1"
+        NULL
     );
-    return (st == LORAWAN_ERROR_OK && strstr(resp, "1"))
-        ? LORAWAN_ERROR_OK
-        : LORAWAN_ERROR_NOT_JOINED;
+    if (st != LORAWAN_ERROR_OK) {
+        return LORAWAN_ERROR_NOT_JOINED;
+    }
+
+    // Skip leading CR/LF/whitespace
+    char *p = resp;
+    while (*p && isspace((unsigned char)*p)) {
+        p++;
+    }
+
+    // Option A: parse as integer
+    if (strtol(p, NULL, 10) == 1) {
+        return LORAWAN_ERROR_OK;
+    }
+
+    return LORAWAN_ERROR_NOT_JOINED;
 }
 
 LoRaWAN_Error_t LoRaWAN_Set_Battery(
@@ -226,4 +242,43 @@ LoRaWAN_Error_t LoRaWAN_Set_Battery(
         5000,
         "OK"
     );
+}
+
+LoRaWAN_Error_t LoRaWAN_SetPort(ATC_HandleTypeDef *lora, uint8_t port) {
+    if (!lora || !lora->huart || port < 1 || port > 198) {
+        return LORAWAN_ERROR_INVALID_PARAM;
+    }
+    // build the ATS command to set the Application Port
+    char cmd[16];
+    int n = snprintf(cmd, sizeof(cmd), "ATS%u=%u\r\n",
+                     (unsigned)APPLICATION_PORT_PARAM,
+                     (unsigned)port);
+    if (n < 0 || n >= (int)sizeof(cmd)) {
+        return LORAWAN_ERROR_INVALID_PARAM;
+    }
+    // fire off “ATS629=<port>” and wait for “OK”
+    char resp[64] = {0};
+    return send_data_and_get_response(
+        lora,
+        cmd,
+        resp,
+        sizeof(resp),
+        5000,
+        "OK"
+    );
+}
+
+LoRaWAN_Error_t LoRaWAN_SendHexOnPort(
+    ATC_HandleTypeDef *lora,
+    uint8_t           port,
+    const uint8_t    *payload,
+    size_t            length
+) {
+    // 1) change to your desired port
+    LoRaWAN_Error_t err = LoRaWAN_SetPort(lora, port);
+    if (err != LORAWAN_ERROR_OK) {
+        return err;
+    }
+    // 2) send exactly as before
+    return LoRaWAN_SendHex(lora, payload, length);
 }

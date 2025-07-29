@@ -23,16 +23,19 @@ void scan_i2c_bus(void)
 	// we re-set these to false because we want to check this every time for safety
     has_sensor_1 = false;
     has_sensor_2 = false;
-
     if (HAL_I2C_IsDeviceReady(&hi2c1, 68 << 1, 1, 10) == HAL_OK) has_sensor_1 = true;
     if (HAL_I2C_IsDeviceReady(&hi2c1, 70 << 1, 1, 10) == HAL_OK) has_sensor_2 = true;
+    return;
 }
 
-bool sensor_init_and_read(void)
+I2C_Error_t sensor_init_and_read(void)
 {
+	HAL_GPIO_WritePin(I2C_ENABLE_GPIO_Port, I2C_ENABLE_Pin, GPIO_PIN_SET);
+	scan_i2c_bus();
     if (!has_sensor_1 && !has_sensor_2) {
     	i2c_error_code = NO_SENSORS_FOUND;
-        return false;
+    	HAL_GPIO_WritePin(I2C_ENABLE_GPIO_Port, I2C_ENABLE_Pin, GPIO_PIN_RESET);
+        return I2C_ERROR_BOTH_SENSORS_NOT_RESPONDING;
     }
 
     i2c_error_code = NO_ERROR;
@@ -53,22 +56,20 @@ bool sensor_init_and_read(void)
         sht4x_init(SHT40_I2C_ADDR_46);
         i2c_error_code = sht4x_measure_high_precision_ticks(&temp_ticks_2, &hum_ticks_2);
     }
+    HAL_GPIO_WritePin(I2C_ENABLE_GPIO_Port, I2C_ENABLE_Pin, GPIO_PIN_RESET);
 
-    calculated_temp            = (temp_ticks_1 / 100U) + 55U;
-//    uint16_t calculated_temp_2 = (temp_ticks_2 / 100U) + 55U;
-    calculated_hum             = (hum_ticks_1 / 100U);
-//    uint8_t  calculated_hum_2  = (hum_ticks_2 / 100U);
+             calculated_temp   = (uint16_t)((temp_ticks_1 + 5U) / 10U);
+    uint16_t calculated_temp_2 = (uint16_t)((temp_ticks_2 + 5U) / 10U);
 
-    // compute raw differences (signed)
-//    int16_t temp_diff = (int16_t)calculated_temp - (int16_t)calculated_temp_2;
-//    int16_t hum_diff  = (int16_t)calculated_hum - (int16_t)calculated_hum_2;
+             calculated_hum    = (uint8_t)(hum_ticks_1 / 1000U);
+    uint8_t  calculated_hum_2  = (uint8_t)(hum_ticks_2 / 1000U);
 
-    // convert to absolute unsigned values
-//    uint8_t temp_delta = (uint8_t)abs(temp_diff);
-//    uint8_t hum_delta  = (uint8_t)abs(hum_diff);
+    // Determine diffs between temps and hums
+    uint8_t temp_delta = (uint8_t)abs(calculated_temp - calculated_temp_2);
+//    uint8_t hum_delta  = (uint8_t)abs(calculated_hum  - calculated_hum_2);
 
-    if (i2c_error_code) {
-        return false;
-    }
-    return true;
+    if (temp_delta > 2) return I2C_ERROR_SENSORS_TOO_DIFFERENT;
+    if (i2c_error_code) return false;
+
+    return I2C_ERROR_OK;
 }
