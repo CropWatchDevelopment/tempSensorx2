@@ -10,6 +10,8 @@
 #include "stm32l0xx_hal_pwr.h"
 #include "stm32l0xx_hal_gpio.h"
 #include "stm32l0xx_hal_rtc.h"
+#include "stm32l0xx_hal_adc.h"
+#include "stm32l0xx_hal_adc_ex.h"
 #include "sleep.h"
 
 void enter_sleep_mode()
@@ -41,26 +43,23 @@ void enter_sleep_mode()
 	HAL_ADCEx_DisableVREFINTTempSensor();
 	ConsolePrintf("VREFINT and temp sensor disabled\r\n");
 	
-	// CRITICAL: Enable Ultra Low Power mode RIGHT BEFORE entering sleep
-	// This ensures it's not disabled by any peripheral deinitialization
+	// CRITICAL: Enable Ultra Low Power mode before entering sleep
 	HAL_PWREx_EnableUltraLowPower();
 	HAL_PWREx_EnableFastWakeUp();
 	ConsolePrintf("Ultra Low Power mode enabled\r\n");
+	
+	// Debug power state before sleep
+	debug_power_state();
 	
 	Enter_Stop_Mode();
 	
 	ConsolePrintf("Resumed after wake-up\r\n");
 	
+	// Basic system clock reconfiguration
 	SystemClock_Config_Wrapper();
 	ConsolePrintf("System clock reconfigured\r\n");
 	
-	// CRITICAL: Re-enable Ultra Low Power mode IMMEDIATELY after system clock config
-	// because SystemClock_Config resets the power regulator settings
-	HAL_PWREx_EnableUltraLowPower();
-	HAL_PWREx_EnableFastWakeUp();
-	ConsolePrintf("Ultra Low Power mode re-enabled after system clock config\r\n");
-	
-	// Re-enable peripheral clocks before reinitializing peripherals
+	// Re-enable peripheral clocks
 	__HAL_RCC_I2C1_CLK_ENABLE();
 	__HAL_RCC_USART1_CLK_ENABLE();
 	__HAL_RCC_LPUART1_CLK_ENABLE();
@@ -69,35 +68,22 @@ void enter_sleep_mode()
 	
 	// Restore GPIO configuration after sleep
 	restore_gpio_after_sleep();
+	ConsolePrintf("GPIO restored\r\n");
 	
-	// CRITICAL: Re-configure unused pins for low power after GPIO restoration
-	// The GPIO init wrapper restores all pins, but we need unused ones back to analog
-	configure_gpio_for_low_power();
-	
+	// Re-initialize peripherals
 	MX_I2C1_Init_Wrapper();
 	ConsolePrintf("I2C1 reinitialized\r\n");
+	
 	MX_USART1_UART_Init_Wrapper();
 	ConsolePrintf("UART reinitialized\r\n");
+	
 	MX_LPUART1_UART_Init_Wrapper();
 	ConsolePrintf("LPUART1 (lora) reinitialized\r\n");
-	RTC_WakeUp_Init();
-	ConsolePrintf("RTC Wake-Up Timer reinitialized\r\n");
-	
-	// CRITICAL: Re-enable Ultra Low Power mode after RTC init
-	// RTC initialization might affect power settings
-	HAL_PWREx_EnableUltraLowPower();
-	HAL_PWREx_EnableFastWakeUp();
-	ConsolePrintf("Ultra Low Power mode re-enabled after RTC init\r\n");
 	
 	MX_ADC_Init_Wrapper();
 	ConsolePrintf("ADC reinitialized\r\n");
 	
-	// CRITICAL: Re-disable VREFINT and temp sensor after ADC reinit
-	// ADC initialization re-enables these, causing high power consumption in subsequent sleeps
-	HAL_ADCEx_DisableVREFINT();
-	HAL_ADCEx_DisableVREFINTTempSensor();
-	ConsolePrintf("CRITICAL: VREFINT and temp sensor re-disabled after ADC init\r\n");
-	ConsolePrintf("Power management cycle complete - ready for next sleep\r\n");
+	ConsolePrintf("Wake-up sequence complete - peripherals ready\r\n");
 }
 
 void RTC_WakeUp_Init(void)
@@ -155,10 +141,30 @@ void Enter_Stop_Mode(void)
 {
   ConsolePrintf("Preparing to enter Stop mode\r\n");
 
+  // CRITICAL: Apply Kevin Cantrell's GPIO optimization RIGHT before sleep
+  configure_gpio_for_low_power();
+  ConsolePrintf("GPIO re-optimized immediately before sleep\r\n");
+  
+  // CRITICAL: Disable VREFINT immediately before sleep for ultra-low power
+  // This is the key to getting <5µA sleep current
+  HAL_ADCEx_DisableVREFINT();
+  HAL_ADCEx_DisableVREFINTTempSensor();
+  ConsolePrintf("VREFINT force-disabled before sleep\r\n");
+  
+  // CRITICAL: Disable additional peripheral clocks that might consume power
+  __HAL_RCC_DMA1_CLK_DISABLE();
+  __HAL_RCC_CRC_CLK_DISABLE();
+  ConsolePrintf("Additional peripheral clocks disabled\r\n");
+  
+  // Verify and force Ultra Low Power mode
+  HAL_PWREx_EnableUltraLowPower();
+  HAL_PWREx_EnableFastWakeUp();
+  ConsolePrintf("ULP mode verified and enabled before sleep\r\n");
+
   // Clear Wake-Up flag
   __HAL_RTC_WAKEUPTIMER_CLEAR_FLAG(&hrtc, RTC_FLAG_WUTF);
   ConsolePrintf("RTC Wake-Up flag cleared\r\n");
-  
+
   // Enter Stop mode (low-power mode)
   ConsolePrintf("Entering Stop mode\r\n");
   /* Suspend SysTick to prevent it from waking up the MCU immediately */
@@ -180,22 +186,58 @@ void configure_gpio_for_low_power(void)
 {
     GPIO_InitTypeDef GPIO_InitStruct = {0};
     
-    // Configure all unused GPIO pins to analog mode to minimize leakage current
-    // This is CRITICAL for achieving lowest power consumption
+    // Enable all GPIO clocks first
+    __HAL_RCC_GPIOA_CLK_ENABLE();
+    __HAL_RCC_GPIOB_CLK_ENABLE();
+    __HAL_RCC_GPIOC_CLK_ENABLE();
+    __HAL_RCC_GPIOH_CLK_ENABLE(); // Don't forget GPIOH for ultra-low power
     
-    // GPIOA: Set unused pins to analog mode (except PA0 - VBAT_MEAS, PA2/PA3 - USART1, PA9/PA10 if used)
-    GPIO_InitStruct.Pin = GPIO_PIN_1 | GPIO_PIN_4 | GPIO_PIN_5 | GPIO_PIN_6 | GPIO_PIN_7 | 
-                          GPIO_PIN_8 | GPIO_PIN_11 | GPIO_PIN_12 | GPIO_PIN_15;
-    GPIO_InitStruct.Mode = GPIO_MODE_ANALOG;
+    // Kevin Cantrell's optimized GPIO configuration for ultra-low power
+    // First set specific pins as outputs LOW to prevent floating
+    GPIO_InitStruct.Pin = GPIO_PIN_0 | GPIO_PIN_1 | GPIO_PIN_5;
+    GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
     GPIO_InitStruct.Pull = GPIO_NOPULL;
-    HAL_GPIO_Init(GPIOA, &GPIO_InitStruct);
-    
-    // GPIOB: Set unused pins to analog mode (except PB0 - VBAT_MEAS_EN, PB1 - ADC, PB5 - I2C_ENABLE, PB6/PB7 - I2C1, PB10/PB11 - LPUART1)
-    GPIO_InitStruct.Pin = GPIO_PIN_2 | GPIO_PIN_3 | GPIO_PIN_4 | GPIO_PIN_8 | 
-                          GPIO_PIN_9 | GPIO_PIN_12 | GPIO_PIN_13 | GPIO_PIN_14 | GPIO_PIN_15;
-    GPIO_InitStruct.Mode = GPIO_MODE_ANALOG;
-    GPIO_InitStruct.Pull = GPIO_NOPULL;
+    GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
     HAL_GPIO_Init(GPIOB, &GPIO_InitStruct);
+    HAL_GPIO_WritePin(GPIOB, GPIO_PIN_0 | GPIO_PIN_1 | GPIO_PIN_5, GPIO_PIN_RESET);
+
+    /* Set ALL unused pins as Analog Inputs for minimum power consumption */
+    
+    // GPIOA: Set unused pins to analog mode (exclude PA13/PA14 for debug if needed)
+    GPIO_InitStruct.Pin = GPIO_PIN_0 | GPIO_PIN_1 | GPIO_PIN_2 | GPIO_PIN_3 | GPIO_PIN_4 | 
+                          GPIO_PIN_5 | GPIO_PIN_6 | GPIO_PIN_7 | GPIO_PIN_8 | GPIO_PIN_9 | 
+                          GPIO_PIN_10 | GPIO_PIN_11 | GPIO_PIN_12 | GPIO_PIN_15;
+    GPIO_InitStruct.Mode = GPIO_MODE_ANALOG;
+    GPIO_InitStruct.Pull = GPIO_NOPULL;
+    GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
+    HAL_GPIO_Init(GPIOA, &GPIO_InitStruct);
+
+    // GPIOB: Set unused pins to analog (excluding the ones we set as outputs above)
+    GPIO_InitStruct.Pin = GPIO_PIN_2 | GPIO_PIN_3 | GPIO_PIN_4 | GPIO_PIN_6 | GPIO_PIN_7 | 
+                          GPIO_PIN_8 | GPIO_PIN_9 | GPIO_PIN_10 | GPIO_PIN_11 | GPIO_PIN_12 | 
+                          GPIO_PIN_13 | GPIO_PIN_14 | GPIO_PIN_15;
+    GPIO_InitStruct.Mode = GPIO_MODE_ANALOG;
+    GPIO_InitStruct.Pull = GPIO_NOPULL;
+    GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
+    HAL_GPIO_Init(GPIOB, &GPIO_InitStruct);
+
+    // GPIOC: Set ALL pins to analog mode
+    GPIO_InitStruct.Pin = GPIO_PIN_0 | GPIO_PIN_1 | GPIO_PIN_2 | GPIO_PIN_3 | GPIO_PIN_4 | 
+                          GPIO_PIN_5 | GPIO_PIN_6 | GPIO_PIN_7 | GPIO_PIN_8 | GPIO_PIN_9 | 
+                          GPIO_PIN_10 | GPIO_PIN_11 | GPIO_PIN_12 | GPIO_PIN_13 | GPIO_PIN_14 | GPIO_PIN_15;
+    GPIO_InitStruct.Mode = GPIO_MODE_ANALOG;
+    GPIO_InitStruct.Pull = GPIO_NOPULL;
+    GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
+    HAL_GPIO_Init(GPIOC, &GPIO_InitStruct);
+    
+    // GPIOH: Usually just H0 and H1 on STM32L0, but set to analog for lowest power
+    GPIO_InitStruct.Pin = GPIO_PIN_0 | GPIO_PIN_1;
+    GPIO_InitStruct.Mode = GPIO_MODE_ANALOG;
+    GPIO_InitStruct.Pull = GPIO_NOPULL;
+    GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
+    HAL_GPIO_Init(GPIOH, &GPIO_InitStruct);
+    
+    ConsolePrintf("All unused GPIO pins optimized for ultra-low power\r\n");
 }
 
 void restore_gpio_after_sleep(void)
@@ -204,4 +246,79 @@ void restore_gpio_after_sleep(void)
     // This should restore only the pins that are actually used
     // Most pins can remain in analog mode
     MX_GPIO_Init_Wrapper(); // This will restore the necessary GPIO configurations
+}
+
+void debug_power_state(void)
+{
+    ConsolePrintf("=== POWER DEBUG ===\r\n");
+    
+    // Check Ultra Low Power mode status
+    if (READ_BIT(PWR->CR, PWR_CR_ULP) != 0) {
+        ConsolePrintf("ULP mode: ENABLED\r\n");
+    } else {
+        ConsolePrintf("ULP mode: DISABLED\r\n");
+    }
+    
+    // Check Fast Wake-up mode
+    if (READ_BIT(PWR->CR, PWR_CR_FWU) != 0) {
+        ConsolePrintf("Fast Wake: ENABLED\r\n");
+    } else {
+        ConsolePrintf("Fast Wake: DISABLED\r\n");
+    }
+    
+    // Check VREFINT status
+    if (READ_BIT(SYSCFG->CFGR3, SYSCFG_CFGR3_EN_VREFINT) != 0) {
+        ConsolePrintf("VREFINT: ENABLED (HIGH POWER!)\r\n");
+    } else {
+        ConsolePrintf("VREFINT: DISABLED\r\n");
+    }
+    
+    // Check peripheral clocks
+    ConsolePrintf("I2C1 CLK: %s\r\n", __HAL_RCC_I2C1_IS_CLK_ENABLED() ? "ON" : "OFF");
+    ConsolePrintf("UART1 CLK: %s\r\n", __HAL_RCC_USART1_IS_CLK_ENABLED() ? "ON" : "OFF");
+    ConsolePrintf("LPUART1 CLK: %s\r\n", __HAL_RCC_LPUART1_IS_CLK_ENABLED() ? "ON" : "OFF");
+    ConsolePrintf("ADC1 CLK: %s\r\n", __HAL_RCC_ADC1_IS_CLK_ENABLED() ? "ON" : "OFF");
+    ConsolePrintf("DMA1 CLK: %s\r\n", __HAL_RCC_DMA1_IS_CLK_ENABLED() ? "ON" : "OFF");
+    ConsolePrintf("CRC CLK: %s\r\n", __HAL_RCC_CRC_IS_CLK_ENABLED() ? "ON" : "OFF");
+    
+    ConsolePrintf("===================\r\n");
+}
+
+void post_wake_power_optimization(void)
+{
+    ConsolePrintf("=== POST-WAKE POWER OPTIMIZATION ===\r\n");
+    
+    // This function addresses the key differences between initial sleep vs post-wake sleep
+    
+    // 1. CRITICAL: Disable VREFINT that gets re-enabled by multiple peripheral inits
+    HAL_ADCEx_DisableVREFINT();
+    HAL_ADCEx_DisableVREFINTTempSensor();
+    ConsolePrintf("VREFINT force-disabled (main power culprit)\r\n");
+    
+    // 2. Re-apply Kevin Cantrell's GPIO optimization aggressively
+    configure_gpio_for_low_power();
+    ConsolePrintf("GPIO re-optimized for ultra-low power\r\n");
+    
+    // 3. Force Ultra Low Power mode (peripheral inits might disable it)
+    HAL_PWREx_EnableUltraLowPower();
+    HAL_PWREx_EnableFastWakeUp();
+    ConsolePrintf("ULP mode force-enabled\r\n");
+    
+    // 4. Disable any peripheral clocks that shouldn't be running
+    // These might get enabled during SystemClock_Config or peripheral inits
+    if (__HAL_RCC_DMA1_IS_CLK_ENABLED()) {
+        __HAL_RCC_DMA1_CLK_DISABLE();
+        ConsolePrintf("DMA1 clock force-disabled\r\n");
+    }
+    
+    if (__HAL_RCC_CRC_IS_CLK_ENABLED()) {
+        __HAL_RCC_CRC_CLK_DISABLE();
+        ConsolePrintf("CRC clock force-disabled\r\n");
+    }
+    
+    // 5. Ensure all unused GPIO clocks are disabled after optimization
+    // Note: We need the clocks enabled to configure the pins, then we can disable them
+    ConsolePrintf("GPIO optimization complete for post-wake sleep\r\n");
+    
+    ConsolePrintf("=== POST-WAKE OPTIMIZATION COMPLETE ===\r\n");
 }

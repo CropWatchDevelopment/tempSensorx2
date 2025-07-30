@@ -68,6 +68,7 @@ Battery_Status_t GetBatteryLevel(uint32_t *out_v, uint8_t *out_pct)
     }
 
     *out_v = (uint32_t)v_mV;
+    ConsolePrintf("Input Voltage: %lu.%03lu V\r\n", (uint32_t)v_mV / 1000, (uint32_t)v_mV % 1000);
 
     if ((uint32_t)v_mV <= V_MIN_MV) {
         *out_pct = 0;
