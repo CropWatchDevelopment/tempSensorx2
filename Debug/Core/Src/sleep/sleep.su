@@ -1,7 +1,8 @@
-../Core/Src/sleep/sleep.c:15:6:enter_sleep_mode	8	static
-../Core/Src/sleep/sleep.c:103:6:RTC_WakeUp_Init	8	static
-../Core/Src/sleep/sleep.c:129:6:MX_ADC_DeInit	8	static
-../Core/Src/sleep/sleep.c:154:6:Enter_Stop_Mode	8	static
-../Core/Src/sleep/sleep.c:173:6:HAL_RTCEx_WakeUpTimerEventCallback	16	static
-../Core/Src/sleep/sleep.c:179:6:configure_gpio_for_low_power	32	static
-../Core/Src/sleep/sleep.c:201:6:restore_gpio_after_sleep	8	static
+../Core/Src/sleep/sleep.c:16:6:enter_sleep_mode	8	static
+../Core/Src/sleep/sleep.c:107:6:MX_ADC_DeInit	8	static
+../Core/Src/sleep/sleep.c:132:6:Enter_Stop_Mode	8	static
+../Core/Src/sleep/sleep.c:151:6:HAL_RTCEx_WakeUpTimerEventCallback	16	static
+../Core/Src/sleep/sleep.c:157:6:configure_gpio_for_low_power	32	static
+../Core/Src/sleep/sleep.c:179:6:restore_gpio_after_sleep	8	static
+../Core/Src/sleep/sleep.c:187:6:apply_extreme_low_power_settings	8	static
+../Core/Src/sleep/sleep.c:218:6:configure_all_gpio_for_minimum_power	56	static

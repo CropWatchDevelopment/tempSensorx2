@@ -25,6 +25,7 @@ SUBDIRS := \
 Core/Src/LoRaWAN \
 Core/Src/battery \
 Core/Src \
+Core/Src/rtc \
 Core/Src/sensirion \
 Core/Src/sleep \
 Core/Src/utils \

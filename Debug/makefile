@@ -14,6 +14,7 @@ RM := rm -rf
 -include Core/Src/utils/subdir.mk
 -include Core/Src/sleep/subdir.mk
 -include Core/Src/sensirion/subdir.mk
+-include Core/Src/rtc/subdir.mk
 -include Core/Src/battery/subdir.mk
 -include Core/Src/LoRaWAN/subdir.mk
 -include Core/Src/subdir.mk

@@ -1,0 +1,10 @@
+../Core/Src/rtc/rtc.c:27:6:RTC_WakeUp_Init_Calibrated	16	static
+../Core/Src/rtc/rtc.c:64:6:RTC_Calibrate_LSI	32	static
+../Core/Src/rtc/rtc.c:117:10:RTC_Measure_LSI_Frequency	8	static
+../Core/Src/rtc/rtc.c:134:10:RTC_Calculate_WakeUp_Counter	24	static
+../Core/Src/rtc/rtc.c:157:13:RTC_Get_Calibration_Status	8	static
+../Core/Src/rtc/rtc.c:165:6:RTC_Apply_Factory_Calibration	16	static
+../Core/Src/rtc/rtc.c:192:9:RTC_Test_Timing_Accuracy	16	static
+../Core/Src/rtc/rtc.c:211:6:RTC_Manual_Calibration	24	static
+../Core/Src/rtc/rtc.c:233:6:RTC_Print_Calibration_Guide	8	static
+../Core/Src/rtc/rtc.c:253:6:RTC_Apply_Calibration_Value	16	static

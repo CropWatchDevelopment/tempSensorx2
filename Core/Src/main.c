@@ -31,6 +31,7 @@
 #include "utils/sensor_payload.h"
 #include "stm32l0xx_hal.h"
 #include "sleep/sleep.h"
+#include "rtc/rtc.h"
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -133,7 +134,11 @@ int main(void)
   MX_LPUART1_UART_Init();
   MX_ADC_Init();
   /* USER CODE BEGIN 2 */
-  RTC_WakeUp_Init();
+  
+  // Initialize RTC with calibration and print calibration guide
+  RTC_Print_Calibration_Guide();
+  RTC_WakeUp_Init_Calibrated();
+  
   LoRaWAN_Join(&lora);
   LoRaWAN_UpdateBattery(&lora);
   /* USER CODE END 2 */
@@ -206,12 +211,13 @@ void SystemClock_Config(void)
 
   /** Initializes the RCC Oscillators according to the specified parameters
   * in the RCC_OscInitTypeDef structure.
+  * Using MSI at higher range for balance of power efficiency and timing accuracy
   */
   RCC_OscInitStruct.OscillatorType = RCC_OSCILLATORTYPE_LSI|RCC_OSCILLATORTYPE_MSI;
   RCC_OscInitStruct.LSIState = RCC_LSI_ON;
   RCC_OscInitStruct.MSIState = RCC_MSI_ON;
   RCC_OscInitStruct.MSICalibrationValue = 0;
-  RCC_OscInitStruct.MSIClockRange = RCC_MSIRANGE_5;
+  RCC_OscInitStruct.MSIClockRange = RCC_MSIRANGE_6;  // 4.194 MHz for better timing than default
   RCC_OscInitStruct.PLL.PLLState = RCC_PLL_NONE;
   if (HAL_RCC_OscConfig(&RCC_OscInitStruct) != HAL_OK)
   {
@@ -219,15 +225,16 @@ void SystemClock_Config(void)
   }
 
   /** Initializes the CPU, AHB and APB buses clocks
+  * Using MSI at 4.194 MHz for balance of power efficiency and timing accuracy
   */
   RCC_ClkInitStruct.ClockType = RCC_CLOCKTYPE_HCLK|RCC_CLOCKTYPE_SYSCLK
                               |RCC_CLOCKTYPE_PCLK1|RCC_CLOCKTYPE_PCLK2;
-  RCC_ClkInitStruct.SYSCLKSource = RCC_SYSCLKSOURCE_MSI;
+  RCC_ClkInitStruct.SYSCLKSource = RCC_SYSCLKSOURCE_MSI;  // Use MSI for low power
   RCC_ClkInitStruct.AHBCLKDivider = RCC_SYSCLK_DIV1;
   RCC_ClkInitStruct.APB1CLKDivider = RCC_HCLK_DIV1;
   RCC_ClkInitStruct.APB2CLKDivider = RCC_HCLK_DIV1;
 
-  if (HAL_RCC_ClockConfig(&RCC_ClkInitStruct, FLASH_LATENCY_0) != HAL_OK)
+  if (HAL_RCC_ClockConfig(&RCC_ClkInitStruct, FLASH_LATENCY_0) != HAL_OK)  // No wait state for <8 MHz
   {
     Error_Handler();
   }
