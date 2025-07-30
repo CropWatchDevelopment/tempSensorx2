@@ -48,7 +48,8 @@ void enter_sleep_mode()
 	HAL_PWREx_EnableFastWakeUp();
 	ConsolePrintf("Ultra Low Power mode enabled\r\n");
 	
-	// Debug power state before sleep
+	// Final power state check right before sleep
+	ConsolePrintf("=== FINAL POWER CHECK BEFORE SLEEP ===\r\n");
 	debug_power_state();
 	
 	Enter_Stop_Mode();
@@ -156,10 +157,22 @@ void Enter_Stop_Mode(void)
   __HAL_RCC_CRC_CLK_DISABLE();
   ConsolePrintf("Additional peripheral clocks disabled\r\n");
   
+  // CRITICAL: Additional power optimizations for ultra-low power
+  // Disable any remaining high-power peripherals
+  __HAL_RCC_TIM2_CLK_DISABLE();
+  __HAL_RCC_TIM21_CLK_DISABLE();
+  __HAL_RCC_TIM22_CLK_DISABLE();
+  ConsolePrintf("Timer clocks disabled\r\n");
+  
   // Verify and force Ultra Low Power mode
   HAL_PWREx_EnableUltraLowPower();
   HAL_PWREx_EnableFastWakeUp();
   ConsolePrintf("ULP mode verified and enabled before sleep\r\n");
+  
+  // CRITICAL: One final VREFINT disable (sometimes it gets re-enabled)
+  HAL_ADCEx_DisableVREFINT();
+  HAL_ADCEx_DisableVREFINTTempSensor();
+  ConsolePrintf("VREFINT double-check disabled\r\n");
 
   // Clear Wake-Up flag
   __HAL_RTC_WAKEUPTIMER_CLEAR_FLAG(&hrtc, RTC_FLAG_WUTF);
@@ -193,27 +206,30 @@ void configure_gpio_for_low_power(void)
     __HAL_RCC_GPIOH_CLK_ENABLE(); // Don't forget GPIOH for ultra-low power
     
     // Kevin Cantrell's optimized GPIO configuration for ultra-low power
-    // First set specific pins as outputs LOW to prevent floating
-    GPIO_InitStruct.Pin = GPIO_PIN_0 | GPIO_PIN_1 | GPIO_PIN_5;
-    GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
-    GPIO_InitStruct.Pull = GPIO_NOPULL;
-    GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
-    HAL_GPIO_Init(GPIOB, &GPIO_InitStruct);
-    HAL_GPIO_WritePin(GPIOB, GPIO_PIN_0 | GPIO_PIN_1 | GPIO_PIN_5, GPIO_PIN_RESET);
-
-    /* Set ALL unused pins as Analog Inputs for minimum power consumption */
+    // CRITICAL: Be very careful with pin selection - avoid pins used by system
     
-    // GPIOA: Set unused pins to analog mode (exclude PA13/PA14 for debug if needed)
-    GPIO_InitStruct.Pin = GPIO_PIN_0 | GPIO_PIN_1 | GPIO_PIN_2 | GPIO_PIN_3 | GPIO_PIN_4 | 
-                          GPIO_PIN_5 | GPIO_PIN_6 | GPIO_PIN_7 | GPIO_PIN_8 | GPIO_PIN_9 | 
-                          GPIO_PIN_10 | GPIO_PIN_11 | GPIO_PIN_12 | GPIO_PIN_15;
+    // GPIOA: Set unused pins to analog mode (EXCLUDE PA13/PA14 for SWD debug)
+    // Also exclude any pins used by the application
+    GPIO_InitStruct.Pin = GPIO_PIN_0 | GPIO_PIN_1 | GPIO_PIN_3 | GPIO_PIN_4 | 
+                          GPIO_PIN_5 | GPIO_PIN_6 | GPIO_PIN_7 | GPIO_PIN_8 | GPIO_PIN_11 | 
+                          GPIO_PIN_12 | GPIO_PIN_15;
     GPIO_InitStruct.Mode = GPIO_MODE_ANALOG;
     GPIO_InitStruct.Pull = GPIO_NOPULL;
     GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
     HAL_GPIO_Init(GPIOA, &GPIO_InitStruct);
 
-    // GPIOB: Set unused pins to analog (excluding the ones we set as outputs above)
-    GPIO_InitStruct.Pin = GPIO_PIN_2 | GPIO_PIN_3 | GPIO_PIN_4 | GPIO_PIN_6 | GPIO_PIN_7 | 
+    // GPIOB: Critical optimization - set some pins as output LOW first
+    // PB5 is I2C_ENABLE - set it LOW to disable I2C power during sleep
+    GPIO_InitStruct.Pin = GPIO_PIN_5; // I2C_ENABLE pin
+    GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
+    GPIO_InitStruct.Pull = GPIO_NOPULL;
+    GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
+    HAL_GPIO_Init(GPIOB, &GPIO_InitStruct);
+    HAL_GPIO_WritePin(GPIOB, GPIO_PIN_5, GPIO_PIN_RESET); // Turn OFF I2C power
+    ConsolePrintf("I2C power disabled during sleep (PB5 = LOW)\r\n");
+    
+    // Set other GPIOB pins to analog (exclude PB6/PB7 which might be I2C pins)
+    GPIO_InitStruct.Pin = GPIO_PIN_0 | GPIO_PIN_1 | GPIO_PIN_2 | GPIO_PIN_3 | GPIO_PIN_4 | 
                           GPIO_PIN_8 | GPIO_PIN_9 | GPIO_PIN_10 | GPIO_PIN_11 | GPIO_PIN_12 | 
                           GPIO_PIN_13 | GPIO_PIN_14 | GPIO_PIN_15;
     GPIO_InitStruct.Mode = GPIO_MODE_ANALOG;
@@ -221,7 +237,7 @@ void configure_gpio_for_low_power(void)
     GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
     HAL_GPIO_Init(GPIOB, &GPIO_InitStruct);
 
-    // GPIOC: Set ALL pins to analog mode
+    // GPIOC: Set ALL pins to analog mode (usually safe)
     GPIO_InitStruct.Pin = GPIO_PIN_0 | GPIO_PIN_1 | GPIO_PIN_2 | GPIO_PIN_3 | GPIO_PIN_4 | 
                           GPIO_PIN_5 | GPIO_PIN_6 | GPIO_PIN_7 | GPIO_PIN_8 | GPIO_PIN_9 | 
                           GPIO_PIN_10 | GPIO_PIN_11 | GPIO_PIN_12 | GPIO_PIN_13 | GPIO_PIN_14 | GPIO_PIN_15;
@@ -230,7 +246,7 @@ void configure_gpio_for_low_power(void)
     GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
     HAL_GPIO_Init(GPIOC, &GPIO_InitStruct);
     
-    // GPIOH: Usually just H0 and H1 on STM32L0, but set to analog for lowest power
+    // GPIOH: Usually just H0 and H1 on STM32L0, set to analog for lowest power
     GPIO_InitStruct.Pin = GPIO_PIN_0 | GPIO_PIN_1;
     GPIO_InitStruct.Mode = GPIO_MODE_ANALOG;
     GPIO_InitStruct.Pull = GPIO_NOPULL;
@@ -321,4 +337,30 @@ void post_wake_power_optimization(void)
     ConsolePrintf("GPIO optimization complete for post-wake sleep\r\n");
     
     ConsolePrintf("=== POST-WAKE OPTIMIZATION COMPLETE ===\r\n");
+}
+
+void prepare_for_next_sleep(void)
+{
+    ConsolePrintf("=== PREPARING FOR NEXT SLEEP CYCLE ===\r\n");
+    
+    // This function should be called AFTER sensor operations and LoRaWAN transmission
+    // but BEFORE the next enter_sleep_mode() call
+    
+    // 1. CRITICAL: Disable VREFINT that gets re-enabled by ADC operations
+    HAL_ADCEx_DisableVREFINT();
+    HAL_ADCEx_DisableVREFINTTempSensor();
+    ConsolePrintf("VREFINT disabled for next sleep cycle\r\n");
+    
+    // 2. Force Ultra Low Power mode (may get disabled during sensor/LoRaWAN operations)
+    HAL_PWREx_EnableUltraLowPower();
+    HAL_PWREx_EnableFastWakeUp();
+    ConsolePrintf("ULP mode enabled for next sleep cycle\r\n");
+    
+    // 3. Debug power state to verify optimizations
+    debug_power_state();
+    
+    ConsolePrintf("=== READY FOR NEXT SLEEP CYCLE ===\r\n");
+    
+    // NOTE: Peripheral deinitialization and clock disabling will be done in enter_sleep_mode()
+    // This ensures proper sequencing and avoids conflicts with GPIO configuration
 }

@@ -185,6 +185,9 @@ int main(void)
 		ConsolePrintf("I am not joined, trying to join again...\r\n");
 		LoRaWAN_Join(&lora);
 	}
+	
+	// CRITICAL: Prepare for next sleep cycle after all operations complete
+	prepare_for_next_sleep();
   }
   /* USER CODE END 3 */
 }
